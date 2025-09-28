@@ -333,10 +333,8 @@ router.get('/history/website', authenticateToken, async (req: AuthRequest, res) 
     );
     const total = (countRows[0]?.total as number) ?? 0;
 
-    const [rows] = await pool.execute<RowDataPacket[]>(
-      'SELECT id, url, created_at as createdAt FROM user_website_history WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
-      [req.user.userId, limit, offset]
-    );
+    const websiteSql = `SELECT id, url, created_at as createdAt FROM user_website_history WHERE user_id = ? ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
+    const [rows] = await pool.execute<RowDataPacket[]>(websiteSql, [req.user.userId]);
 
     res.json({ items: rows, total });
   } catch (error) {
@@ -400,10 +398,8 @@ router.get('/history/generation', authenticateToken, async (req: AuthRequest, re
     );
     const total = (countRows[0]?.total as number) ?? 0;
 
-    const [rows] = await pool.execute<RowDataPacket[]>(
-      'SELECT id, url, payload, created_at as createdAt FROM user_generation_history WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
-      [req.user.userId, limit, offset]
-    );
+    const genSql = `SELECT id, url, payload, created_at as createdAt FROM user_generation_history WHERE user_id = ? ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
+    const [rows] = await pool.execute<RowDataPacket[]>(genSql, [req.user.userId]);
 
     const items = rows.map((row) => {
       let parsed: unknown = {};
