@@ -16,25 +16,51 @@ const dbConfig = {
   charset: 'utf8mb4'
 };
 
+// 兼容 TiDB Cloud/TLS：支持通过 DB_URL 指定完整连接串
+function createPoolFromUrl(url: string) {
+  const parsed = new URL(url);
+  const host = parsed.hostname;
+  const port = Number(parsed.port || 3306);
+  const user = decodeURIComponent(parsed.username);
+  const password = decodeURIComponent(parsed.password);
+  const database = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+
+  return mysql.createPool({
+    host,
+    port,
+    user,
+    password,
+    database,
+    waitForConnections: true,
+    connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
+    queueLimit: 0,
+    charset: 'utf8mb4',
+    // TiDB Serverless 需要 TLS
+    ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+  });
+}
+
 // 创建连接池
-export const pool = mysql.createPool(dbConfig);
+export const pool = process.env.DB_URL
+  ? createPoolFromUrl(process.env.DB_URL)
+  : mysql.createPool(dbConfig);
 
 // 初始化数据库和表
 export async function initializeDatabase() {
   try {
-    // 首先连接到MySQL服务器（不指定数据库）
-    const connection = await mysql.createConnection({
-      host: dbConfig.host,
-      port: dbConfig.port,
-      user: dbConfig.user,
-      password: dbConfig.password
-    });
-
-    // 创建数据库
-    await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\``);
-    console.log('数据库 media_magnet_users 创建成功或已存在');
-
-    await connection.end();
+    // DB_URL 场景通常已指定 database，且某些托管（如 PlanetScale/TiDB）限制创建库。
+    // 允许通过 DB_SKIP_CREATE=true 跳过建库步骤。
+    if (!process.env.DB_URL && String(process.env.DB_SKIP_CREATE).toLowerCase() !== 'true') {
+      const connection = await mysql.createConnection({
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.user,
+        password: dbConfig.password
+      });
+      await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\``);
+      console.log('数据库 media_magnet_users 创建成功或已存在');
+      await connection.end();
+    }
 
     // 现在使用连接池连接到新数据库并创建表
     const createUsersTable = `
