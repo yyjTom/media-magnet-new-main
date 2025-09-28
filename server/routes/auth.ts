@@ -1,10 +1,10 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { pool } from '../config/database';
-import { sendVerificationEmail, generateVerificationCode, testEmailConfiguration } from '../services/emailService';
+import { pool } from '../config/database.js';
+import { sendVerificationEmail, generateVerificationCode, testEmailConfiguration } from '../services/emailService.js';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { authenticateToken, type AuthRequest } from '../middleware/auth';
+import { authenticateToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
