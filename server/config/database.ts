@@ -13,7 +13,11 @@ const dbConfig = {
   waitForConnections: true,
   connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
   queueLimit: 0,
-  charset: 'utf8mb4'
+  charset: 'utf8mb4',
+  // 当 DB_SSL=true 时为托管数据库开启 TLS
+  ...(String(process.env.DB_SSL).toLowerCase() === 'true'
+    ? { ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true } }
+    : {})
 };
 
 // 兼容 TiDB Cloud/TLS：支持通过 DB_URL 指定完整连接串
@@ -35,7 +39,7 @@ function createPoolFromUrl(url: string) {
     connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
     queueLimit: 0,
     charset: 'utf8mb4',
-    // TiDB Serverless 需要 TLS
+    // TiDB Serverless 要求 TLS
     ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true }
   });
 }
@@ -48,14 +52,17 @@ export const pool = process.env.DB_URL
 // 初始化数据库和表
 export async function initializeDatabase() {
   try {
-    // DB_URL 场景通常已指定 database，且某些托管（如 PlanetScale/TiDB）限制创建库。
-    // 允许通过 DB_SKIP_CREATE=true 跳过建库步骤。
+    // DB_URL/托管库场景：通常不允许 CREATE DATABASE，可通过 DB_SKIP_CREATE=true 跳过
     if (!process.env.DB_URL && String(process.env.DB_SKIP_CREATE).toLowerCase() !== 'true') {
       const connection = await mysql.createConnection({
         host: dbConfig.host,
         port: dbConfig.port,
         user: dbConfig.user,
-        password: dbConfig.password
+        password: dbConfig.password,
+        // 本地自建 MySQL 可不启用 TLS
+        ...(String(process.env.DB_SSL).toLowerCase() === 'true'
+          ? { ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true } }
+          : {})
       });
       await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\``);
       console.log('数据库 media_magnet_users 创建成功或已存在');
