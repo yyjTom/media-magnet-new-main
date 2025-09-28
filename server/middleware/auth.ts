@@ -15,12 +15,12 @@ export function authenticateToken(req: AuthRequest, res: Response, next: NextFun
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
-    return res.status(401).json({ error: '访问令牌缺失' });
+    return res.status(401).json({ error: 'Missing access token' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(403).json({ error: '无效的访问令牌' });
+      return res.status(403).json({ error: 'Invalid access token' });
     }
     
     req.user = decoded as { userId: number; email: string };
