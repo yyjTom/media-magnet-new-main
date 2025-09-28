@@ -122,9 +122,11 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
     });
     if (urls.size === 0) return;
 
-    // call backend validator (use backend base to avoid dev-server proxy issues)
-    const BASE = `${location.protocol}//${location.hostname}:3001`;
-    fetch(`${BASE}/api/auth/validate-urls`, {
+    // call backend validator
+    const base = import.meta.env.PROD
+      ? ''
+      : `${location.protocol}//${location.hostname}:3001`;
+    fetch(`${base}/api/auth/validate-urls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls: Array.from(urls) }),
