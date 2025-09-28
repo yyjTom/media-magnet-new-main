@@ -26,7 +26,7 @@ EMAIL_HOST=smtpdm.aliyun.com
 EMAIL_PORT=465
 EMAIL_SECURE=true
 EMAIL_USER=noreply@yourdomain.com
-EMAIL_PASS=your-smtp-password
+EMAIL_PASS=your-smtp-password  # 注意是SMTP密码/授权码，不是登录密码
 EMAIL_FROM_NAME=Media Magnet
 
 # 前端地址（用于CORS）
@@ -52,10 +52,11 @@ GET http://localhost:3001/api/auth/test-email-config
 
 ### 5. 常见问题
 
-#### 问题1: 发送邮件失败
-- 检查发信地址是否在阿里云邮件推送中正确配置
-- 确认SMTP密码是否正确
-- 验证域名是否已备案并通过验证
+#### 问题1: 发送邮件失败 / 551 Main account unavailable
+- 确认使用的是 SMTP 专用密码（授权码），不是控制台登录密码
+- 检查发信域名、发信地址状态是否正常（未封禁/冻结）
+- 验证域名已完成备案与 SPF/DKIM 配置
+- 默认端口使用 465 + SSL；如需 25/587，设置 EMAIL_PORT=25(或587) 且 EMAIL_SECURE=false
 
 #### 问题2: 邮件被拒收
 - 确保发信域名已完成SPF、DKIM等配置

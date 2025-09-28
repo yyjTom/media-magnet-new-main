@@ -6,9 +6,10 @@ let cachedTransporter: nodemailer.Transporter | null = null;
 function getTransporter(): nodemailer.Transporter {
   if (cachedTransporter) return cachedTransporter;
 
-  const host = process.env.EMAIL_HOST || 'smtp.dm.aliyun.com';
-  const secure = String(process.env.EMAIL_SECURE).toLowerCase() === 'true';
-  const port = Number(process.env.EMAIL_PORT || (secure ? 465 : 80));
+  const host = process.env.EMAIL_HOST || 'smtpdm.aliyun.com';
+  const secureEnv = process.env.EMAIL_SECURE;
+  const secure = secureEnv ? String(secureEnv).toLowerCase() === 'true' : true; // 默认走 SSL 465
+  const port = Number(process.env.EMAIL_PORT || (secure ? 465 : 25));
   const user = process.env.EMAIL_USER || '';
   const pass = process.env.EMAIL_PASS || '';
 
@@ -89,7 +90,7 @@ export async function testEmailConfiguration(): Promise<boolean> {
       return false;
     }
     
-    const host = process.env.EMAIL_HOST || 'smtp.dm.aliyun.com';
+    const host = process.env.EMAIL_HOST || 'smtpdm.aliyun.com';
     const secure = String(process.env.EMAIL_SECURE).toLowerCase() === 'true';
     const port = Number(process.env.EMAIL_PORT || (secure ? 465 : 80));
 
