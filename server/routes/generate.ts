@@ -86,6 +86,36 @@ Return the result as JSON with this exact shape:
 Ensure each value is a single concise message for the specified channel, ready to send.`;
 };
 
+// Robust JSON parser for LLM outputs
+function parseJsonFromModel(raw: any): any {
+  if (typeof raw !== 'string') {
+    throw new Error('Model response is not a string');
+  }
+  let text = raw.trim();
+  // Strip Markdown code fences
+  if (text.startsWith('```')) {
+    // remove opening fence with optional language tag
+    text = text.replace(/^```[a-zA-Z]*\s*/i, '');
+    // remove closing fence
+    text = text.replace(/\s*```\s*$/i, '');
+    text = text.trim();
+  }
+  // First direct parse
+  try {
+    return JSON.parse(text);
+  } catch {}
+  // Extract innermost JSON object by braces
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    const candidate = text.slice(start, end + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {}
+  }
+  throw new Error('Unable to parse JSON payload from model output');
+}
+
 // Helper function for Gemini requests with timeout and retry
 async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -214,7 +244,7 @@ router.post('/journalists', async (req, res) => {
 
     let parsed: any;
     try {
-      parsed = JSON.parse(rawContent);
+      parsed = parseJsonFromModel(rawContent);
     } catch (e) {
       console.error('Failed to parse Gemini JSON:', rawContent);
       return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
@@ -313,7 +343,7 @@ router.post('/outreach', async (req, res) => {
 
     let parsed: any;
     try {
-      parsed = JSON.parse(rawContent);
+      parsed = parseJsonFromModel(rawContent);
     } catch (e) {
       console.error('Failed to parse Gemini JSON:', rawContent);
       return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
