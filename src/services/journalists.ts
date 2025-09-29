@@ -1,5 +1,4 @@
-const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_MODEL = 'gpt-4o-mini';
+const BACKEND_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001';
 const TARGET_JOURNALIST_COUNT = 20;
 
 export interface JournalistSource {
@@ -84,10 +83,7 @@ export async function findJournalists({
   companyDescription,
 }: FindJournalistsRequest): Promise<FindJournalistsResponse> {
 
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key is not configured. Set VITE_OPENAI_API_KEY in your environment.');
-  }
+  // Call backend proxy
 
   const hasWebsite = Boolean(website && website.trim().length > 0);
   const safeWebsite = website?.trim() || '';
@@ -101,31 +97,15 @@ export async function findJournalists({
     companyDescription: resolvedCompanyDescription,
   });
 
-  const response = await fetch(OPENAI_ENDPOINT, {
+  const response = await fetch(`${BACKEND_BASE}/api/generate/journalists`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a meticulous media researcher who only responds with valid JSON and never includes commentary outside of the JSON object.',
-        },
-        {
-          role: 'user',
-          content: buildPrompt({
-            website: safeWebsite,
-            companyName: resolvedCompanyName,
-            companyDescription: resolvedCompanyDescription,
-          }),
-        },
-      ],
+      website: safeWebsite,
+      companyName: resolvedCompanyName,
+      companyDescription: resolvedCompanyDescription,
     }),
   });
 
@@ -140,17 +120,12 @@ export async function findJournalists({
   }
 
   const payload = await response.json();
-  const rawContent = payload?.choices?.[0]?.message?.content;
+  const rawContent = JSON.stringify(payload);
 
   console.info('[findJournalists] OpenAI response received', {
     usage: payload?.usage,
     hasContent: Boolean(rawContent),
   });
-
-  if (typeof rawContent !== 'string') {
-    console.error('[findJournalists] Unexpected response shape', { payload });
-    throw new Error('Unexpected OpenAI response format.');
-  }
 
   let parsed: unknown;
   try {
@@ -371,39 +346,16 @@ export async function getEmailBody({
   companyDescription,
   website,
 }: GetEmailBodyRequest): Promise<GetEmailBodyResponse> {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key is not configured. Set VITE_OPENAI_API_KEY in your environment.');
-  }
-
-  console.info('[getEmailBody] Request initiated', {
-    journalist: journalist.name,
-    email: journalist.email,
-    companyName,
-    website,
-  });
-
-  const response = await fetch(OPENAI_ENDPOINT, {
+  const response = await fetch(`${BACKEND_BASE}/api/generate/outreach`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
-      temperature: 0.4,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a concise PR copywriter who only responds with valid JSON matching the requested schema.',
-        },
-        {
-          role: 'user',
-          content: buildOutreachPrompt({ journalist, companyName, companyDescription, website }),
-        },
-      ],
+      journalist,
+      companyName,
+      companyDescription,
+      website,
     }),
   });
 
@@ -418,17 +370,12 @@ export async function getEmailBody({
   }
 
   const payload = await response.json();
-  const rawContent = payload?.choices?.[0]?.message?.content;
+  const rawContent = JSON.stringify(payload?.outreach ?? {});
 
   console.info('[getEmailBody] OpenAI response received', {
     usage: payload?.usage,
     hasContent: Boolean(rawContent),
   });
-
-  if (typeof rawContent !== 'string') {
-    console.error('[getEmailBody] Unexpected response shape', { payload });
-    throw new Error('Unexpected OpenAI response format.');
-  }
 
   let parsed: unknown;
   try {
@@ -440,9 +387,7 @@ export async function getEmailBody({
 
   const outreach = normalizeOutreach(parsed);
 
-  console.info('[getEmailBody] Outreach messages generated', {
-    journalist: journalist.name,
-  });
+  console.info('[getEmailBody] Outreach messages generated', { journalist: journalist.name });
 
   return { outreach };
 }
