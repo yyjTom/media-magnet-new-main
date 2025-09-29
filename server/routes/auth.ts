@@ -8,7 +8,7 @@ import { authenticateToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// JWT密钥
+// JWT secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 interface User extends RowDataPacket {
@@ -20,108 +20,108 @@ interface User extends RowDataPacket {
   verification_expires: Date | null;
 }
 
-// 注册接口
+// Register
 router.post('/register', async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: '邮箱和密码不能为空' });
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // 检查邮箱格式
+    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: '邮箱格式不正确' });
+      return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    // 检查密码强度
+    // Validate password strength
     if (password.length < 6) {
-      return res.status(400).json({ error: '密码长度至少6位' });
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    // 检查用户是否已存在
+    // Check existing user
     const [existingUsers] = await pool.execute<User[]>(
       'SELECT id FROM users WHERE email = ?',
       [email]
     );
 
     if (existingUsers.length > 0) {
-      return res.status(400).json({ error: '该邮箱已被注册' });
+      return res.status(400).json({ error: 'Email is already registered' });
     }
 
     // 加密密码
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // 生成验证码
+    // Generate verification code
     const verificationCode = generateVerificationCode();
-    const verificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10分钟后过期
+    const verificationExpires = new Date(Date.now() + 10 * 60 * 1000); // expires in 10 minutes
 
-    // 插入用户数据
+    // Insert user
     const [result] = await pool.execute<ResultSetHeader>(
       'INSERT INTO users (email, password, verification_code, verification_expires) VALUES (?, ?, ?, ?)',
       [email, hashedPassword, verificationCode, verificationExpires]
     );
 
-    // 发送验证码邮件
+    // Send email verification code
     await sendVerificationEmail(email, verificationCode);
 
     res.status(201).json({
-      message: '注册成功，验证码已发送到您的邮箱',
+      message: 'Registered successfully. Verification code has been sent to your email',
       userId: result.insertId
     });
 
   } catch (error) {
-    console.error('注册失败:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    console.error('Registration failed:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// 验证邮箱接口
+// Verify email
 router.post('/verify-email', async (req, res) => {
   try {
     const { email, code } = req.body;
 
     if (!email || !code) {
-      return res.status(400).json({ error: '邮箱和验证码不能为空' });
+      return res.status(400).json({ error: 'Email and verification code are required' });
     }
 
-    // 查找用户
+    // Find user
     const [users] = await pool.execute<User[]>(
       'SELECT * FROM users WHERE email = ?',
       [email]
     );
 
     if (users.length === 0) {
-      return res.status(404).json({ error: '用户不存在' });
+      return res.status(404).json({ error: 'User not found' });
     }
 
     const user = users[0];
 
-    // 检查验证码
+    // Check verification code
     if (user.verification_code !== code) {
-      return res.status(400).json({ error: '验证码错误' });
+      return res.status(400).json({ error: 'Invalid verification code' });
     }
 
-    // 检查验证码是否过期
+    // Check code expiry
     if (!user.verification_expires || new Date() > user.verification_expires) {
-      return res.status(400).json({ error: '验证码已过期' });
+      return res.status(400).json({ error: 'Verification code has expired' });
     }
 
-    // 更新用户状态
+    // Update user state
     await pool.execute(
       'UPDATE users SET email_verified = TRUE, verification_code = NULL, verification_expires = NULL WHERE id = ?',
       [user.id]
     );
 
-    // 生成JWT token
+    // Generate JWT token
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
       expiresIn: '7d'
     });
 
     res.json({
-      message: '邮箱验证成功',
+      message: 'Email verified successfully',
       token,
       user: {
         id: user.id,
@@ -131,18 +131,18 @@ router.post('/verify-email', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('邮箱验证失败:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    console.error('Email verification failed:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// 登录接口
+// Login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: '邮箱和密码不能为空' });
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
     // 查找用户
@@ -152,29 +152,29 @@ router.post('/login', async (req, res) => {
     );
 
     if (users.length === 0) {
-      return res.status(401).json({ error: '邮箱或密码错误' });
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const user = users[0];
 
-    // 检查邮箱是否已验证
+    // Check email verified
     if (!user.email_verified) {
-      return res.status(401).json({ error: '请先验证您的邮箱' });
+      return res.status(401).json({ error: 'Please verify your email first' });
     }
 
-    // 验证密码
+    // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(401).json({ error: '邮箱或密码错误' });
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // 生成JWT token
+    // Generate JWT token
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
       expiresIn: '7d'
     });
 
     res.json({
-      message: '登录成功',
+      message: 'Login successful',
       token,
       user: {
         id: user.id,
@@ -184,18 +184,18 @@ router.post('/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('登录失败:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    console.error('Login failed:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// 重新发送验证码接口
+// Resend verification code
 router.post('/resend-verification', async (req, res) => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ error: '邮箱不能为空' });
+      return res.status(400).json({ error: 'Email is required' });
     }
 
     // 查找用户
@@ -205,40 +205,40 @@ router.post('/resend-verification', async (req, res) => {
     );
 
     if (users.length === 0) {
-      return res.status(404).json({ error: '用户不存在' });
+      return res.status(404).json({ error: 'User not found' });
     }
 
     const user = users[0];
 
     if (user.email_verified) {
-      return res.status(400).json({ error: '邮箱已经验证过了' });
+      return res.status(400).json({ error: 'Email already verified' });
     }
 
-    // 生成新的验证码
+    // Generate a new code
     const verificationCode = generateVerificationCode();
     const verificationExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-    // 更新验证码
+    // Update the code
     await pool.execute(
       'UPDATE users SET verification_code = ?, verification_expires = ? WHERE id = ?',
       [verificationCode, verificationExpires, user.id]
     );
 
-    // 发送验证码邮件
+    // Send the code
     await sendVerificationEmail(email, verificationCode);
 
-    res.json({ message: '验证码已重新发送' });
+    res.json({ message: 'Verification code resent' });
 
   } catch (error) {
-    console.error('重发验证码失败:', error);
-    res.status(500).json({ error: '服务器内部错误' });
+    console.error('Resend verification failed:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// 测试邮件配置接口（仅用于开发调试）
+// Test email configuration (for development only)
 router.get('/test-email-config', async (req, res) => {
   try {
-    console.log('开始测试邮件配置...');
+    console.log('Start testing email configuration...');
     console.log('EMAIL_HOST:', process.env.EMAIL_HOST);
     console.log('EMAIL_PORT:', process.env.EMAIL_PORT);
     console.log('EMAIL_USER:', process.env.EMAIL_USER );
@@ -249,37 +249,37 @@ router.get('/test-email-config', async (req, res) => {
     if (isConfigValid) {
       res.json({ 
         success: true, 
-        message: '邮件服务配置正常',
+        message: 'Email service is properly configured',
         config: {
           host: process.env.EMAIL_HOST || 'smtpdm.aliyun.com',
           port: process.env.EMAIL_PORT || '465',
-          user: process.env.EMAIL_USER ? '已配置' : '未配置',
+          user: process.env.EMAIL_USER ? 'configured' : 'not configured',
           secure: process.env.EMAIL_SECURE || 'true'
         }
       });
     } else {
       res.status(500).json({ 
         success: false, 
-        message: '邮件服务配置异常，请检查环境变量',
+        message: 'Email service misconfigured. Please check environment variables',
         debug: {
-          host: process.env.EMAIL_HOST || '未配置',
-          port: process.env.EMAIL_PORT || '未配置',
-          user: process.env.EMAIL_USER ? '已配置' : '未配置',
-          pass: process.env.EMAIL_PASS ? '已配置' : '未配置'
+          host: process.env.EMAIL_HOST || 'not set',
+          port: process.env.EMAIL_PORT || 'not set',
+          user: process.env.EMAIL_USER ? 'configured' : 'not configured',
+          pass: process.env.EMAIL_PASS ? 'configured' : 'not configured'
         }
       });
     }
   } catch (error) {
-    console.error('测试邮件配置失败:', error);
+    console.error('Test email configuration failed:', error);
     res.status(500).json({ 
       success: false, 
-      message: '测试邮件配置时发生错误',
-      error: error instanceof Error ? error.message : '未知错误'
+      message: 'An error occurred while testing email configuration',
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
-// 保存用户提交的网站历史
+// Save a submitted website to history
 router.post('/history/website', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { url } = req.body as { url?: string };
@@ -293,7 +293,7 @@ router.post('/history/website', authenticateToken, async (req: AuthRequest, res)
 
     const trimmed = url.trim();
 
-    // 去重：同一用户+同一URL在1分钟内只保留一次
+    // De-duplicate: keep only once in 1 minute for same user+URL
     const [existing] = await pool.execute<RowDataPacket[]>(
       'SELECT id FROM user_website_history WHERE user_id = ? AND url = ? AND created_at > (NOW() - INTERVAL 1 MINUTE) ORDER BY id DESC LIMIT 1',
       [req.user.userId, trimmed]
@@ -315,7 +315,7 @@ router.post('/history/website', authenticateToken, async (req: AuthRequest, res)
   }
 });
 
-// 获取当前用户的网站历史（最近20条）
+// Get user's website history (paginated)
 router.get('/history/website', authenticateToken, async (req: AuthRequest, res) => {
   try {
     if (!req.user) {
@@ -343,7 +343,7 @@ router.get('/history/website', authenticateToken, async (req: AuthRequest, res) 
   }
 });
 
-// 记录一次完整的生成（查询URL + 生成的记者JSON）
+// Record a generation (input URL + generated journalists JSON)
 router.post('/history/generation', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { url, payload } = req.body as { url?: string; payload?: unknown };
@@ -381,7 +381,7 @@ router.post('/history/generation', authenticateToken, async (req: AuthRequest, r
   }
 });
 
-// 获取最近生成历史
+// Get paginated generation history
 router.get('/history/generation', authenticateToken, async (req: AuthRequest, res) => {
   try {
     if (!req.user) {
@@ -427,7 +427,7 @@ router.get('/history/generation', authenticateToken, async (req: AuthRequest, re
   }
 });
 
-// 批量校验URL可达性（HEAD失败会回退GET），用于过滤404等无效链接
+// Batch validate URLs (fallback GET if HEAD not allowed) to filter invalid links
 router.post('/validate-urls', async (req, res) => {
   try {
     const { urls } = req.body as { urls?: string[] };
@@ -470,17 +470,17 @@ router.post('/validate-urls', async (req, res) => {
       try {
         let resp = await tryFetch('HEAD');
         if (resp.status === 405 || resp.status === 403 || (resp.status >= 400 && resp.status < 600)) {
-          // 某些站点不支持HEAD，回退GET
+          // Some sites don't allow HEAD – fallback to GET
           resp = await tryFetch('GET');
         }
 
-        // 仅将 404/410 判定为明确无效；其余如 401/403/429/999 等视为“可能有效”（软通过）
+        // Only treat 404/410 as invalid; other statuses (401/403/429/999) are soft-pass
         const status = resp.status;
         const explicitInvalid = status === 404 || status === 410;
         const ok = (resp.ok && status < 400) || (!explicitInvalid);
         return { url, ok, status };
       } catch (err) {
-        // 网络失败：判定为无效，前端会标注 unavailable
+        // Network failures are considered invalid; frontend will mark as unavailable
         return { url, ok: false, status: 0 };
       }
     };
