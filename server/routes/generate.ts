@@ -46,6 +46,7 @@ Only return valid JSON. No extra commentary.`;
 
 // ---------- Google搜索爬虫功能 ----------
 const getFirstGoogleSearchResult = async (query: string): Promise<string | null> => {
+  let browser: any = null;
   try {
     console.log(`🔍 Searching Google for: "${query}"`);
     
@@ -68,7 +69,7 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
       }
     }
     
-    // 配置Puppeteer启动参数
+    // 配置Puppeteer启动参数（优化稳定性）
     const launchArgs = [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -79,7 +80,13 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
       '--single-process',
       '--disable-gpu',
       '--disable-web-security',
-      '--disable-features=VizDisplayCompositor'
+      '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-ipc-flooding-protection',
+      '--memory-pressure-off',
+      '--max_old_space_size=4096'
     ];
     
     // 如果有代理，添加代理参数
@@ -87,10 +94,13 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
       launchArgs.push(`--proxy-server=${normalizedProxy}`);
     }
     
-    // 使用Puppeteer来获取Google搜索结果
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: launchArgs
+    // 使用Puppeteer来获取Google搜索结果（增强配置）
+    browser = await puppeteer.launch({
+      headless: true, // 使用headless模式
+      args: launchArgs,
+      timeout: 30000, // 30秒启动超时
+      protocolTimeout: 30000,
+      defaultViewport: { width: 1280, height: 720 }
     });
     
     const page = await browser.newPage();
@@ -111,35 +121,70 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
     // 构建Google搜索URL
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=1`;
     
-    // 访问Google搜索页面
-    await page.goto(searchUrl, { 
-      waitUntil: 'networkidle2',
-      timeout: 15000 
-    });
+    // 设置页面超时和错误处理
+    page.setDefaultTimeout(20000);
+    page.setDefaultNavigationTimeout(20000);
     
-    // 等待搜索结果加载
-    await page.waitForSelector('div[data-ved]', { timeout: 10000 });
-    
-    // 提取第一个搜索结果的链接
-    const firstResultLink = await page.evaluate(() => {
-      // 查找第一个真实的搜索结果链接（不是广告）
-      const resultSelectors = [
-        'div[data-ved] a[href^="http"]:not([href*="googleadservices"])',
-        'h3 a[href^="http"]:not([href*="googleadservices"])',
-        '.g a[href^="http"]:not([href*="googleadservices"])',
-        '[data-ved] a[href^="http"]:not([href*="googleadservices"])'
-      ];
-      
-      for (const selector of resultSelectors) {
-        const element = document.querySelector(selector) as HTMLAnchorElement;
-        if (element && element.href && !element.href.includes('google.com') && !element.href.includes('googleadservices')) {
-          return element.href;
-        }
-      }
+    // 访问Google搜索页面（改进错误处理）
+    try {
+      await page.goto(searchUrl, { 
+        waitUntil: 'domcontentloaded', // 改为更快的加载策略
+        timeout: 20000 
+      });
+    } catch (navigationError) {
+      console.error(`Navigation failed for "${query}":`, navigationError.message);
+      await browser.close();
       return null;
-    });
+    }
     
-    await browser.close();
+    // 等待搜索结果加载（更宽松的选择器）
+    try {
+      await page.waitForSelector('body', { timeout: 5000 }); // 先等待页面基本加载
+      await page.waitForSelector('div[data-ved], .g, #search', { timeout: 15000 }); // 等待搜索结果
+    } catch (selectorError) {
+      console.error(`Search results not found for "${query}":`, selectorError.message);
+      await browser.close();
+      return null;
+    }
+    
+    // 提取第一个搜索结果的链接（改进选择器）
+    let firstResultLink = null;
+    try {
+      firstResultLink = await page.evaluate(() => {
+        // 查找第一个真实的搜索结果链接（不是广告，更全面的选择器）
+        const resultSelectors = [
+          'h3 a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
+          'div[data-ved] a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
+          '.g a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
+          '[data-ved] a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
+          'a[href^="http"][data-ved]:not([href*="googleadservices"]):not([href*="google.com/search"])'
+        ];
+        
+        for (const selector of resultSelectors) {
+          const elements = document.querySelectorAll(selector);
+          for (const element of elements) {
+            const href = (element as HTMLAnchorElement).href;
+            if (href && 
+                !href.includes('google.com') && 
+                !href.includes('googleadservices') && 
+                !href.includes('youtube.com/redirect') &&
+                !href.includes('webcache.googleusercontent.com')) {
+              return href;
+            }
+          }
+        }
+        return null;
+      });
+    } catch (evaluateError) {
+      console.error(`Failed to extract link for "${query}":`, evaluateError.message);
+    }
+    
+    // 确保浏览器始终被关闭
+    try {
+      await browser.close();
+    } catch (closeError) {
+      console.error(`Failed to close browser for "${query}":`, closeError.message);
+    }
     
     if (firstResultLink) {
       console.log(`✅ Found first Google result: ${firstResultLink}`);
@@ -151,6 +196,14 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
     
   } catch (error) {
     console.error(`❌ Google search failed for "${query}":`, error);
+    // 确保在错误情况下也关闭浏览器
+    try {
+      if (browser) {
+        await browser.close();
+      }
+    } catch (closeError) {
+      console.error(`Failed to close browser in error handler:`, closeError.message);
+    }
     return null;
   }
 };
@@ -448,7 +501,7 @@ router.post('/journalists', async (req, res) => {
     }
 
     // Map the simplified schema to the app's expected schema for compatibility and fetch Google search results
-    const mapItemWithSearch = async (item: any) => {
+    const mapItemWithSearch = async (item: any, skipSearch = false) => {
       const name = item?.name ?? '';
       const outlet = item?.outlet ?? item?.media ?? item?.parentMediaOrganization ?? '';
       const beat = item?.beat ?? '';
@@ -460,7 +513,7 @@ router.post('/journalists', async (req, res) => {
 
       // 尝试通过Google搜索获取真实的文章链接
       let coverageLink = '';
-      if (name && outlet) {
+      if (!skipSearch && name && outlet) {
         const searchQuery = `"${name}" journalist "${outlet}"`;
         const searchResult = await getFirstGoogleSearchResult(searchQuery);
         if (searchResult) {
@@ -482,16 +535,29 @@ router.post('/journalists', async (req, res) => {
       };
     };
 
-    // 为所有记者异步获取Google搜索结果
+    // 为所有记者逐个获取Google搜索结果（避免并发问题）
     const rawJournalists = Array.isArray(parsed?.journalists) ? parsed.journalists : [];
-    console.log(`🔍 Starting Google search for ${rawJournalists.length} journalists...`);
+    console.log(`🔍 Starting Google search for ${rawJournalists.length} journalists (sequential processing)...`);
     
-    const journalists = await Promise.all(
-      rawJournalists.map((item, index) => {
-        console.log(`🔍 Processing journalist ${index + 1}/${rawJournalists.length}: ${item?.name || 'Unknown'}`);
-        return mapItemWithSearch(item);
-      })
-    );
+    const journalists: any[] = [];
+    for (let i = 0; i < rawJournalists.length; i++) {
+      const item = rawJournalists[i];
+      console.log(`🔍 Processing journalist ${i + 1}/${rawJournalists.length}: ${item?.name || 'Unknown'}`);
+      try {
+        const result = await mapItemWithSearch(item);
+        journalists.push(result);
+        
+        // 在请求之间添加短暂延迟，避免过于频繁的请求
+        if (i < rawJournalists.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1秒延迟
+        }
+      } catch (error) {
+        console.error(`❌ Failed to process journalist ${item?.name || 'Unknown'}:`, error.message);
+        // 即使单个记者搜索失败，也要继续处理其他记者
+        const fallbackResult = await mapItemWithSearch(item, true); // 跳过搜索
+        journalists.push(fallbackResult);
+      }
+    }
     
     console.log(`✅ Completed Google search for all journalists`);
     const totalTime = Date.now() - requestStartTime;
