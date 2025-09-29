@@ -107,7 +107,12 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
       console.log(`OpenAI request attempt ${attempt + 1}/${maxRetries + 1}`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
+      
+      // Add progress logging
+      const progressInterval = setInterval(() => {
+        console.log('⏳ OpenAI request still processing... (this is normal for complex requests)');
+      }, 30000); // Log every 30 seconds
       
       const response = await fetch(OPENAI_ENDPOINT, {
         method: 'POST',
@@ -120,6 +125,7 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
       });
       
       clearTimeout(timeoutId);
+      clearInterval(progressInterval);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -128,6 +134,8 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
       
       return await response.json();
     } catch (error: any) {
+      clearTimeout(timeoutId);
+      clearInterval(progressInterval);
       lastError = error;
       console.error(`OpenAI request attempt ${attempt + 1} failed:`, error.message);
       
@@ -308,7 +316,7 @@ router.get('/test-openai', async (req, res) => {
           'Authorization': `Bearer ${apiKey}`,
           'User-Agent': 'Node.js'
         },
-        signal: AbortSignal.timeout(15000) // 15s timeout for test
+        signal: AbortSignal.timeout(60000) // 60s timeout for test
       });
       
       const duration = Date.now() - startTime;
