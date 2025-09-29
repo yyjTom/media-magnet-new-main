@@ -1,7 +1,7 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
-// 确保在该模块中也加载环境变量，避免被提前 import 时读不到配置
+// Ensure env is loaded here as well to avoid reading before injection
 dotenv.config();
 
 const dbConfig = {
@@ -14,13 +14,13 @@ const dbConfig = {
   connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
   queueLimit: 0,
   charset: 'utf8mb4',
-  // 当 DB_SSL=true 时为托管数据库开启 TLS
+  // Enable TLS for managed databases when DB_SSL=true
   ...(String(process.env.DB_SSL).toLowerCase() === 'true'
     ? { ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true } }
     : {})
 };
 
-// 兼容 TiDB Cloud/TLS：支持通过 DB_URL 指定完整连接串
+// Support DB_URL with TLS (e.g., TiDB Cloud)
 function createPoolFromUrl(url: string) {
   const parsed = new URL(url);
   const host = parsed.hostname;
@@ -39,7 +39,7 @@ function createPoolFromUrl(url: string) {
     connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
     queueLimit: 0,
     charset: 'utf8mb4',
-    // TiDB Serverless 要求 TLS
+    // TiDB Serverless requires TLS
     ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true }
   });
 }
@@ -49,27 +49,27 @@ export const pool = process.env.DB_URL
   ? createPoolFromUrl(process.env.DB_URL)
   : mysql.createPool(dbConfig);
 
-// 初始化数据库和表
+// Initialize database and tables
 export async function initializeDatabase() {
   try {
-    // DB_URL/托管库场景：通常不允许 CREATE DATABASE，可通过 DB_SKIP_CREATE=true 跳过
+    // In DB_URL/managed DB scenarios: CREATE DATABASE is usually not allowed; skip via DB_SKIP_CREATE=true
     if (!process.env.DB_URL && String(process.env.DB_SKIP_CREATE).toLowerCase() !== 'true') {
       const connection = await mysql.createConnection({
         host: dbConfig.host,
         port: dbConfig.port,
         user: dbConfig.user,
         password: dbConfig.password,
-        // 本地自建 MySQL 可不启用 TLS
+        // Local self-hosted MySQL may skip TLS
         ...(String(process.env.DB_SSL).toLowerCase() === 'true'
           ? { ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true } }
           : {})
       });
       await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\``);
-      console.log('数据库 media_magnet_users 创建成功或已存在');
+      console.log('Database media_magnet_users created or already exists');
       await connection.end();
     }
 
-    // 现在使用连接池连接到新数据库并创建表
+    // Use pool to connect to the database and create tables
     const createUsersTable = `
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -120,7 +120,7 @@ export async function initializeDatabase() {
     await pool.execute(createWebsiteHistoryTable);
     await pool.execute(createGenerationHistoryTable);
 
-    // 索引优化：提升历史查询性能
+    // Index optimization: improve history query performance
     try {
       await pool.execute('CREATE INDEX idx_user_website_history_user_created ON user_website_history (user_id, created_at)');
     } catch {}
@@ -128,9 +128,9 @@ export async function initializeDatabase() {
       await pool.execute('CREATE INDEX idx_user_generation_history_user_created ON user_generation_history (user_id, created_at)');
     } catch {}
 
-    console.log('用户表创建成功');
+    console.log('Tables and indexes ensured');
   } catch (error) {
-    console.error('数据库初始化失败:', error);
+    console.error('Database initialization failed:', error);
     throw error;
   }
 }

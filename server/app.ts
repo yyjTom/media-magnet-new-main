@@ -25,7 +25,7 @@ app.get('/health', (req, res) => {
 });
 
 export const ready = initializeDatabase().then(() => {
-  console.log('数据库初始化完成');
+  console.log('Database initialized');
 });
 
 export default app;

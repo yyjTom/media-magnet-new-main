@@ -6,11 +6,11 @@ async function startServer() {
   try {
     await ready;
     app.listen(PORT, () => {
-      console.log(`服务器运行在端口 ${PORT}`);
-      console.log(`健康检查: http://localhost:${PORT}/health`);
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Health check: http://localhost:${PORT}/health`);
     });
   } catch (error) {
-    console.error('服务器启动失败:', error);
+    console.error('Server failed to start:', error);
     process.exit(1);
   }
 }
