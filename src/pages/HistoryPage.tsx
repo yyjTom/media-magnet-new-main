@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { authService } from '@/services/authService';
 import { findJournalists } from '@/services/journalists';
 import { Journalist } from '@/services/journalists';
-import { Calendar, RefreshCw, Clock, Globe, ArrowLeft } from 'lucide-react';
+import { Calendar, RefreshCw, Clock, Globe, ArrowLeft, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom';
 
@@ -259,17 +259,7 @@ export const HistoryPage: React.FC = () => {
                               </Badge>
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {j.coverageSummary}{' '}
-                              {j.coverageLink && (
-                                <a
-                                  href={j.coverageLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline"
-                                >
-                                  Read ↗
-                                </a>
-                              )}
+                              {j.coverageSummary}
                             </div>
                             <div className="mt-2 text-sm flex gap-4 flex-wrap">
                               {j.email && (
@@ -307,27 +297,21 @@ export const HistoryPage: React.FC = () => {
                                   Instagram
                                 </a>
                               )}
+                              <button
+                                onClick={() => {
+                                  const searchQuery = `${j.name} journalist`;
+                                  const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+                                  window.open(googleUrl, '_blank', 'noopener,noreferrer');
+                                }}
+                                className="inline-flex items-center gap-1 text-primary hover:underline bg-transparent border-0 cursor-pointer p-0 font-inherit text-sm"
+                                aria-label={`Search Google for ${j.name} journalist`}
+                              >
+                                <Search className="h-3 w-3" />
+                                Search Google
+                              </button>
                             </div>
                           </div>
                         </div>
-                        {Array.isArray(j.sources) && j.sources.length > 0 && (
-                          <div className="mt-3 text-sm">
-                            <span className="font-medium text-foreground mr-2">Sources:</span>
-                            <span className="space-x-2">
-                              {j.sources.map((s, si) => (
-                                <a
-                                  key={`${s.url}-${si}`}
-                                  href={s.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline"
-                                >
-                                  {s.description}
-                                </a>
-                              ))}
-                            </span>
-                          </div>
-                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -340,4 +324,6 @@ export const HistoryPage: React.FC = () => {
     </div>
   );
 };
+
+
 

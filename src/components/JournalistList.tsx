@@ -346,28 +346,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                         </Badge>
                       </div>
                       <p className="text-muted-foreground mb-3">
-                        {journalist.coverageSummary}{' '}
-                        {journalist.coverageLink && journalist.coverageLink !== 'null' && journalist.coverageLink.trim() !== '' ? (
-                          <a
-                            href={journalist.coverageLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:text-primary-glow"
-                            onClick={handleCoverageClick}
-                          >
-                            Read coverage ↗
-                          </a>
-                        ) : (
-                          <a
-                            href={`https://www.google.com/search?q=${encodeURIComponent(`"${journalist.name}" journalist "${journalist.parentMediaOrganization}"`)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:text-primary-glow"
-                            onClick={handleCoverageClick}
-                          >
-                            Search articles ↗
-                          </a>
-                        )}
+                        {journalist.coverageSummary}
                       </p>
 
                       <div className="flex items-center gap-4 flex-wrap text-sm">
