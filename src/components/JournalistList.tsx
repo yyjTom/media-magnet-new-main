@@ -76,17 +76,19 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       return;
     }
 
-    if (isError || !data?.journalists) {
-      // 延迟调用确保错误状态也能正确显示
+    // 只有在真正的错误情况下才重置按钮状态
+    if (isError) {
       setTimeout(() => callback([]), 100);
       return;
     }
 
     // 只有当记者列表有10条数据时才重置按钮状态
-    if (data.journalists.length === 10) {
+    if (data?.journalists && data.journalists.length === 10) {
       // 延迟调用确保记者列表已经渲染到DOM中
       setTimeout(() => callback(data.journalists), 200);
     }
+    
+    // 如果没有数据或数据不足10条，不调用callback，保持按钮的loading状态
   }, [data?.journalists, isError]);
   
   const journalistsList = useMemo(() => data?.journalists ?? [], [data?.journalists]);
