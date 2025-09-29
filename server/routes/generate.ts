@@ -54,15 +54,34 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
     // 构建Google搜索URL
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=3`;
     
-    // 设置请求头，模拟真实浏览器
+    // 设置更完整的请求头，模拟真实浏览器
+    const userAgents = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
+    ];
+    
+    const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+    
     const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
+      'User-Agent': randomUserAgent,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
       'Connection': 'keep-alive',
       'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0',
+      'DNT': '1',
     };
+    
+    // 添加随机延迟，避免被检测为自动化请求
+    const delay = Math.random() * 2000 + 1000; // 1-3秒随机延迟
+    await new Promise(resolve => setTimeout(resolve, delay));
     
     // 发起HTTP请求获取搜索结果页面
     const response = await axios.get(searchUrl, {
@@ -74,6 +93,13 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
     
     if (response.status !== 200) {
       console.log(`❌ Google search returned status ${response.status} for: "${query}"`);
+      return null;
+    }
+    
+    // 检查是否收到了JavaScript重定向页面
+    if (response.data.includes('enablejs') || response.data.includes('<noscript>')) {
+      console.log(`⚠️ Google blocked request with JS check for: "${query}"`);
+      console.log(`📄 Response preview:`, response.data.substring(0, 300));
       return null;
     }
     
@@ -145,6 +171,49 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
     console.error(`❌ Google search failed for "${query}":`, error.message);
     return null;
   }
+};
+
+// ---------- 备用URL生成功能 ----------
+const generateFallbackUrl = (name: string, outlet: string): string | null => {
+  if (!name || !outlet) return null;
+  
+  // 规范化名字和媒体机构名称
+  const normalizedName = name.toLowerCase().replace(/[^a-z\s]/g, '').trim();
+  const normalizedOutlet = outlet.toLowerCase().replace(/[^a-z\s]/g, '').trim();
+  
+  // 基于常见媒体网站的URL模式生成可能的链接
+  const urlPatterns: Record<string, (name: string) => string> = {
+    'new york times': (name) => `https://www.nytimes.com/by/${name.replace(/\s+/g, '-')}`,
+    'nytimes': (name) => `https://www.nytimes.com/by/${name.replace(/\s+/g, '-')}`,
+    'wall street journal': (name) => `https://www.wsj.com/news/author/${name.replace(/\s+/g, '-')}`,
+    'wsj': (name) => `https://www.wsj.com/news/author/${name.replace(/\s+/g, '-')}`,
+    'washington post': (name) => `https://www.washingtonpost.com/people/${name.replace(/\s+/g, '-')}`,
+    'guardian': (name) => `https://www.theguardian.com/profile/${name.replace(/\s+/g, '')}`,
+    'the guardian': (name) => `https://www.theguardian.com/profile/${name.replace(/\s+/g, '')}`,
+    'verge': (name) => `https://www.theverge.com/authors/${name.replace(/\s+/g, '-')}`,
+    'the verge': (name) => `https://www.theverge.com/authors/${name.replace(/\s+/g, '-')}`,
+    'techcrunch': (name) => `https://techcrunch.com/author/${name.replace(/\s+/g, '-')}`,
+    'wired': (name) => `https://www.wired.com/author/${name.replace(/\s+/g, '-')}`,
+    'cnet': (name) => `https://www.cnet.com/profiles/${name.replace(/\s+/g, '-')}`,
+    'forbes': (name) => `https://www.forbes.com/sites/${name.replace(/\s+/g, '')}`,
+    'reuters': (name) => `https://www.reuters.com/authors/${name.replace(/\s+/g, '-')}`,
+    'bloomberg': (name) => `https://www.bloomberg.com/authors/${name.replace(/\s+/g, '-')}`,
+    'ars technica': (name) => `https://arstechnica.com/author/${name.replace(/\s+/g, '-')}`,
+    'engadget': (name) => `https://www.engadget.com/author/${name.replace(/\s+/g, '-')}`
+  };
+  
+  // 查找匹配的媒体机构
+  for (const [pattern, urlGenerator] of Object.entries(urlPatterns)) {
+    if (normalizedOutlet.includes(pattern) || pattern.includes(normalizedOutlet)) {
+      try {
+        return urlGenerator(normalizedName);
+      } catch (error) {
+        console.error(`Failed to generate URL for ${name} at ${outlet}:`, error);
+      }
+    }
+  }
+  
+  return null;
 };
 
 const buildOutreachPrompt = ({
@@ -457,6 +526,14 @@ router.post('/journalists', async (req, res) => {
         const searchResult = await getFirstGoogleSearchResult(searchQuery);
         if (searchResult) {
           coverageLink = searchResult;
+        } else {
+          // 如果Google搜索失败，尝试生成一个可能的URL
+          console.log(`🔗 Attempting to generate fallback URL for ${name} at ${outlet}`);
+          const fallbackUrl = generateFallbackUrl(name, outlet);
+          if (fallbackUrl) {
+            console.log(`🔗 Generated fallback URL: ${fallbackUrl}`);
+            coverageLink = fallbackUrl;
+          }
         }
       }
 
