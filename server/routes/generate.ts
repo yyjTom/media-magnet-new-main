@@ -87,6 +87,29 @@ Return the result as JSON with this exact shape:
 Ensure each value is a single concise message for the specified channel, ready to send.`;
 };
 
+// Normalize proxy URL from env to a valid URL string and build agent safely
+function getHttpsAgentFromEnv(): HttpsProxyAgent | undefined {
+  try {
+    const raw = (process.env.GEMINI_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
+    if (!raw) return undefined;
+
+    let url = raw;
+    // If only digits provided, treat as local HTTP proxy port
+    if (/^\d+$/.test(url)) {
+      url = `http://127.0.0.1:${url}`;
+    }
+    // If like host:port (no scheme), prefix http
+    if (!/^https?:\/\//i.test(url)) {
+      url = `http://${url}`;
+    }
+
+    return new HttpsProxyAgent(url);
+  } catch (e: any) {
+    console.error('Invalid proxy configuration, skipping proxy:', e?.message);
+    return undefined;
+  }
+}
+
 // Robust JSON parser for LLM outputs
 function parseJsonFromModel(raw: any): any {
   if (typeof raw !== 'string') {
@@ -160,8 +183,7 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
       };
       
       // Build optional proxy agent only for external Gemini call
-      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '';
-      const httpsAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+      const httpsAgent = getHttpsAgentFromEnv();
 
       // Use axios with better timeout control (proxy applied only here)
       const response = await axios.post(`${GEMINI_ENDPOINT}?key=${apiKey}`, geminiBody, {
@@ -408,8 +430,7 @@ router.get('/test-gemini', async (req, res) => {
         }
       };
 
-      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '';
-      const httpsAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+      const httpsAgent = getHttpsAgentFromEnv();
 
       const response = await axios.post(`${GEMINI_ENDPOINT}?key=${apiKey}`, testBody, {
         headers: {
