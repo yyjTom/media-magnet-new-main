@@ -174,14 +174,13 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
           try {
             const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
             if (cancelled) return;
+            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
             setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
           } catch (e) {
             if (cancelled) return;
+            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
             const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
             setOutreachErrors((prev) => ({ ...prev, [key]: message }));
-          } finally {
-            if (cancelled) return;
-            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
           }
         })
       );
@@ -242,6 +241,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       { journalist },
       {
         onSuccess: (response) => {
+          setOutreachLoading((prev) => ({ ...prev, [journalistKey]: false }));
           setOutreachMessages((prev) => ({ ...prev, [journalistKey]: response.outreach }));
           analytics.outreachGenerated({
             journalistName: journalist.name,
@@ -251,6 +251,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
           });
         },
         onError: (mutationError) => {
+          setOutreachLoading((prev) => ({ ...prev, [journalistKey]: false }));
           const message =
             mutationError instanceof Error ? mutationError.message : 'Unable to generate outreach messages.';
           setOutreachErrors((prev) => ({ ...prev, [journalistKey]: message }));
@@ -261,9 +262,6 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
             website,
             errorMessage: message,
           });
-        },
-        onSettled: () => {
-          setOutreachLoading((prev) => ({ ...prev, [journalistKey]: false }));
         },
       },
     );
