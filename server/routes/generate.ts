@@ -140,6 +140,30 @@ function parseJsonFromModel(raw: any): any {
   throw new Error('Unable to parse JSON payload from model output');
 }
 
+function normalizeOutreachModel(input: any) {
+  const get = (obj: any, keys: string[]): string => {
+    for (const k of keys) {
+      const v = obj?.[k];
+      if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+    }
+    return '';
+  };
+
+  const email = get(input, ['email']);
+  const xDirectMessage = get(input, ['xDirectMessage', 'x_direct_message', 'x_dm', 'twitter_dm']);
+  const xPublicPost = get(input, ['xPublicPost', 'x_public_post', 'twitter_public_post']);
+  const linkedInDirectMessage = get(input, ['linkedInDirectMessage', 'linkedinDirectMessage', 'linkedin_direct_message']);
+  const linkedInPublicPost = get(input, ['linkedInPublicPost', 'linkedinPublicPost', 'linkedin_public_post']);
+
+  return {
+    email: email || 'Hi [Name], ...',
+    xDirectMessage: xDirectMessage || 'Hi [Name] — quick pitch via DM ...',
+    xPublicPost: xPublicPost || 'Sharing a quick note @handle about ...',
+    linkedInDirectMessage: linkedInDirectMessage || 'Hi [Name], reaching out regarding ...',
+    linkedInPublicPost: linkedInPublicPost || 'Excited to share an update ...',
+  };
+}
+
 // Helper function for Gemini requests with timeout and retry
 async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -377,8 +401,11 @@ router.post('/outreach', async (req, res) => {
       return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
     }
 
+    // Normalize outreach keys to match frontend expectations
+    const normalizedOutreach = normalizeOutreachModel(parsed);
+
     console.log('Generated outreach messages for:', journalist?.name);
-    return res.json({ outreach: parsed });
+    return res.json({ outreach: normalizedOutreach });
   } catch (error: any) {
     console.error('Generate outreach failed:', error);
     
