@@ -1,7 +1,6 @@
 import express from 'express';
 import axios from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import * as cheerio from 'cheerio';
 
 const router = express.Router();
 
@@ -19,12 +18,19 @@ const buildPrompt = ({
     ? `${website} (If this is URL, visit its website to gain understanding)`
     : `${companyName || 'The company'} — ${companyDescription}`;
 
-  return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle. The returned result email must exist.
+  return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name and a real article link. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle. The returned result email must exist.
 
-CRITICAL REQUIREMENTS:
-- ALWAYS set article_link to null (do not generate any URLs)
-- Focus on providing accurate journalist contact information and media outlet names
+CRITICAL REQUIREMENTS FOR ARTICLE LINKS:
+- Provide REAL, working article links where these journalists have published relevant content
+- Use actual URLs from major news websites (nytimes.com, wsj.com, theverge.com, techcrunch.com, etc.)
+- If you cannot find a real article link, set article_link to null
+- DO NOT create fake or placeholder URLs
+- Focus on recent articles (within last 2 years) when possible
+- Ensure the article link actually relates to the journalist's work in the relevant field
+
+CONTACT INFORMATION REQUIREMENTS:
 - Provide real, verified email addresses when possible
+- Include accurate LinkedIn and X (Twitter) handles
 - Include the journalist's beat/specialty area
 - Ensure all contact information is current and accurate
 
@@ -43,178 +49,6 @@ Return the data as strict JSON with a top-level "journalists" array of exactly $
 Only return valid JSON. No extra commentary.`;
 };
 
-// ---------- Google搜索爬虫功能 (使用HTTP请求替代Puppeteer) ----------
-const getFirstGoogleSearchResult = async (query: string): Promise<string | null> => {
-  try {
-    console.log(`🔍 Searching Google for: "${query}"`);
-    
-    // 获取代理配置 (重用现有的代理逻辑)
-    const httpsAgent = getHttpsAgentFromEnv();
-    
-    // 构建Google搜索URL
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=3`;
-    
-    // 设置更完整的请求头，模拟真实浏览器
-    const userAgents = [
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
-    ];
-    
-    const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
-    
-    const headers = {
-      'User-Agent': randomUserAgent,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-User': '?1',
-      'Cache-Control': 'max-age=0',
-      'DNT': '1',
-    };
-    
-    // 添加随机延迟，避免被检测为自动化请求
-    const delay = Math.random() * 2000 + 1000; // 1-3秒随机延迟
-    await new Promise(resolve => setTimeout(resolve, delay));
-    
-    // 发起HTTP请求获取搜索结果页面
-    const response = await axios.get(searchUrl, {
-      headers,
-      timeout: 15000,
-      httpsAgent,
-      validateStatus: (status) => status < 500
-    });
-    
-    if (response.status !== 200) {
-      console.log(`❌ Google search returned status ${response.status} for: "${query}"`);
-      return null;
-    }
-    
-    // 检查是否收到了JavaScript重定向页面
-    if (response.data.includes('enablejs') || response.data.includes('<noscript>')) {
-      console.log(`⚠️ Google blocked request with JS check for: "${query}"`);
-      console.log(`📄 Response preview:`, response.data.substring(0, 300));
-      return null;
-    }
-    
-    // 调试：输出响应的前500个字符来检查内容
-    console.log(`📄 Google response preview for "${query}":`, response.data.substring(0, 500));
-    
-    // 使用cheerio解析HTML
-    const $ = cheerio.load(response.data);
-    
-    // 查找第一个真实的搜索结果链接
-    const selectors = [
-      'h3 a[href^="/url?q="]',
-      '.g a[href^="/url?q="]',
-      'div[data-ved] a[href^="/url?q="]',
-      'a[href^="/url?q="]', // 更宽泛的选择器
-      'h3 a[href]', // 更宽泛的选择器
-      '.g a[href]' // 更宽泛的选择器
-    ];
-    
-    // 调试：检查页面中找到了多少个链接
-    console.log(`🔍 Found ${$('a').length} total links in response`);
-    console.log(`🔍 Found ${$('a[href^="/url?q="]').length} Google redirect links`);
-    console.log(`🔍 Found ${$('h3').length} h3 elements`);
-    console.log(`🔍 Found ${$('.g').length} .g elements`);
-    
-    for (const selector of selectors) {
-      const elements = $(selector);
-      console.log(`🔍 Selector "${selector}" found ${elements.length} elements`);
-      
-      for (let i = 0; i < elements.length; i++) {
-        const element = elements.eq(i);
-        const href = element.attr('href');
-        
-        console.log(`🔍 Checking href: ${href}`);
-        
-        if (href && href.startsWith('/url?q=')) {
-          // 从Google的重定向URL中提取真实URL
-          const urlMatch = href.match(/\/url\?q=([^&]+)/);
-          if (urlMatch) {
-            const decodedUrl = decodeURIComponent(urlMatch[1]);
-            console.log(`🔍 Decoded URL: ${decodedUrl}`);
-            
-            // 过滤掉无效的链接
-            if (decodedUrl && 
-                decodedUrl.startsWith('http') &&
-                !decodedUrl.includes('google.com') &&
-                !decodedUrl.includes('googleadservices') &&
-                !decodedUrl.includes('youtube.com/redirect') &&
-                !decodedUrl.includes('webcache.googleusercontent.com')) {
-              
-              console.log(`✅ Found first Google result: ${decodedUrl}`);
-              return decodedUrl;
-            }
-          }
-        } else if (href && href.startsWith('http') && 
-                   !href.includes('google.com') && 
-                   !href.includes('googleadservices')) {
-          // 处理直接的HTTP链接（非Google重定向）
-          console.log(`✅ Found direct HTTP result: ${href}`);
-          return href;
-        }
-      }
-    }
-    
-    console.log(`❌ No valid search result found for: "${query}"`);
-    return null;
-    
-  } catch (error: any) {
-    console.error(`❌ Google search failed for "${query}":`, error.message);
-    return null;
-  }
-};
-
-// ---------- 备用URL生成功能 ----------
-const generateFallbackUrl = (name: string, outlet: string): string | null => {
-  if (!name || !outlet) return null;
-  
-  // 规范化名字和媒体机构名称
-  const normalizedName = name.toLowerCase().replace(/[^a-z\s]/g, '').trim();
-  const normalizedOutlet = outlet.toLowerCase().replace(/[^a-z\s]/g, '').trim();
-  
-  // 基于常见媒体网站的URL模式生成可能的链接
-  const urlPatterns: Record<string, (name: string) => string> = {
-    'new york times': (name) => `https://www.nytimes.com/by/${name.replace(/\s+/g, '-')}`,
-    'nytimes': (name) => `https://www.nytimes.com/by/${name.replace(/\s+/g, '-')}`,
-    'wall street journal': (name) => `https://www.wsj.com/news/author/${name.replace(/\s+/g, '-')}`,
-    'wsj': (name) => `https://www.wsj.com/news/author/${name.replace(/\s+/g, '-')}`,
-    'washington post': (name) => `https://www.washingtonpost.com/people/${name.replace(/\s+/g, '-')}`,
-    'guardian': (name) => `https://www.theguardian.com/profile/${name.replace(/\s+/g, '')}`,
-    'the guardian': (name) => `https://www.theguardian.com/profile/${name.replace(/\s+/g, '')}`,
-    'verge': (name) => `https://www.theverge.com/authors/${name.replace(/\s+/g, '-')}`,
-    'the verge': (name) => `https://www.theverge.com/authors/${name.replace(/\s+/g, '-')}`,
-    'techcrunch': (name) => `https://techcrunch.com/author/${name.replace(/\s+/g, '-')}`,
-    'wired': (name) => `https://www.wired.com/author/${name.replace(/\s+/g, '-')}`,
-    'cnet': (name) => `https://www.cnet.com/profiles/${name.replace(/\s+/g, '-')}`,
-    'forbes': (name) => `https://www.forbes.com/sites/${name.replace(/\s+/g, '')}`,
-    'reuters': (name) => `https://www.reuters.com/authors/${name.replace(/\s+/g, '-')}`,
-    'bloomberg': (name) => `https://www.bloomberg.com/authors/${name.replace(/\s+/g, '-')}`,
-    'ars technica': (name) => `https://arstechnica.com/author/${name.replace(/\s+/g, '-')}`,
-    'engadget': (name) => `https://www.engadget.com/author/${name.replace(/\s+/g, '-')}`
-  };
-  
-  // 查找匹配的媒体机构
-  for (const [pattern, urlGenerator] of Object.entries(urlPatterns)) {
-    if (normalizedOutlet.includes(pattern) || pattern.includes(normalizedOutlet)) {
-      try {
-        return urlGenerator(normalizedName);
-      } catch (error) {
-        console.error(`Failed to generate URL for ${name} at ${outlet}:`, error);
-      }
-    }
-  }
-  
-  return null;
-};
 
 const buildOutreachPrompt = ({
   journalist,
@@ -508,33 +342,22 @@ router.post('/journalists', async (req, res) => {
       return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
     }
 
-    // Map the simplified schema to the app's expected schema for compatibility and fetch Google search results
-    const mapItemWithSearch = async (item: any, skipSearch = false) => {
+    // Map the simplified schema to the app's expected schema for compatibility
+    const mapItem = (item: any) => {
       const name = item?.name ?? '';
       const outlet = item?.outlet ?? item?.media ?? item?.parentMediaOrganization ?? '';
+      const articleLink = item?.article_link ?? item?.['article link'] ?? item?.coverageLink ?? '';
       const beat = item?.beat ?? '';
       const relevanceRaw = item?.relevance_score ?? item?.['relevance score'] ?? item?.relevanceScore ?? 0;
       const relevanceScore = Number.isFinite(Number(relevanceRaw)) ? Math.max(1, Math.min(100, Math.round(Number(relevanceRaw)))) : 0;
       const email = item?.email ?? null;
       const linkedIn = item?.linkedin ?? item?.linkedIn ?? null;
       const twitter = item?.x_handle ?? item?.twitter ?? null;
-
-      // 尝试通过Google搜索获取真实的文章链接
+      
+      // 使用Gemini返回的文章链接，如果是无效的则设为空
       let coverageLink = '';
-      if (!skipSearch && name && outlet) {
-        const searchQuery = `${name} journalist ${outlet}`;
-        const searchResult = await getFirstGoogleSearchResult(searchQuery);
-        if (searchResult) {
-          coverageLink = searchResult;
-        } else {
-          // 如果Google搜索失败，尝试生成一个可能的URL
-          console.log(`🔗 Attempting to generate fallback URL for ${name} at ${outlet}`);
-          const fallbackUrl = generateFallbackUrl(name, outlet);
-          if (fallbackUrl) {
-            console.log(`🔗 Generated fallback URL: ${fallbackUrl}`);
-            coverageLink = fallbackUrl;
-          }
-        }
+      if (articleLink && typeof articleLink === 'string' && articleLink !== 'null' && articleLink.startsWith('http')) {
+        coverageLink = articleLink;
       }
 
       return {
@@ -551,31 +374,11 @@ router.post('/journalists', async (req, res) => {
       };
     };
 
-    // 为所有记者逐个获取Google搜索结果（避免并发问题）
+    // 处理所有记者信息
     const rawJournalists = Array.isArray(parsed?.journalists) ? parsed.journalists : [];
-    console.log(`🔍 Starting Google search for ${rawJournalists.length} journalists (sequential processing)...`);
+    console.log(`📝 Processing ${rawJournalists.length} journalists from Gemini...`);
     
-    const journalists: any[] = [];
-    for (let i = 0; i < rawJournalists.length; i++) {
-      const item = rawJournalists[i];
-      console.log(`🔍 Processing journalist ${i + 1}/${rawJournalists.length}: ${item?.name || 'Unknown'}`);
-      try {
-        const result = await mapItemWithSearch(item);
-        journalists.push(result);
-        
-        // 在请求之间添加短暂延迟，避免过于频繁的请求
-        if (i < rawJournalists.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 1秒延迟
-        }
-      } catch (error) {
-        console.error(`❌ Failed to process journalist ${item?.name || 'Unknown'}:`, error.message);
-        // 即使单个记者搜索失败，也要继续处理其他记者
-        const fallbackResult = await mapItemWithSearch(item, true); // 跳过搜索
-        journalists.push(fallbackResult);
-      }
-    }
-    
-    console.log(`✅ Completed Google search for all journalists`);
+    const journalists = rawJournalists.map(mapItem);
     const totalTime = Date.now() - requestStartTime;
     console.log(`✅ Generated ${journalists.length} journalists in ${totalTime}ms`);
     return res.json({ journalists });
