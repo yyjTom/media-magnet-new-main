@@ -120,27 +120,16 @@ export async function findJournalists({
   }
 
   const payload = await response.json();
-  const rawContent = JSON.stringify(payload);
 
-  console.info('[findJournalists] OpenAI response received', {
-    usage: payload?.usage,
-    hasContent: Boolean(rawContent),
+  console.info('[findJournalists] Backend response received', {
+    hasJournalists: Array.isArray(payload?.journalists),
+    journalistCount: Array.isArray(payload?.journalists) ? payload.journalists.length : 0,
   });
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawContent);
-  } catch (error) {
-    console.error('[findJournalists] Failed to parse JSON', { rawContent, error });
-    throw new Error('Failed to parse OpenAI response as JSON.');
-  }
-
-  const journalists = Array.isArray((parsed as Record<string, unknown>).journalists)
-    ? ((parsed as { journalists: unknown[] }).journalists as unknown[])
-    : [];
+  const journalists = Array.isArray(payload?.journalists) ? payload.journalists : [];
 
   if (!journalists.length) {
-    console.warn('[findJournalists] No journalists returned', { parsed });
+    console.warn('[findJournalists] No journalists returned', { payload });
   }
 
   const normalized = journalists
@@ -370,22 +359,12 @@ export async function getEmailBody({
   }
 
   const payload = await response.json();
-  const rawContent = JSON.stringify(payload?.outreach ?? {});
 
-  console.info('[getEmailBody] OpenAI response received', {
-    usage: payload?.usage,
-    hasContent: Boolean(rawContent),
+  console.info('[getEmailBody] Backend response received', {
+    hasOutreach: Boolean(payload?.outreach),
   });
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawContent);
-  } catch (error) {
-    console.error('[getEmailBody] Failed to parse JSON', { rawContent, error });
-    throw new Error('Failed to parse OpenAI response as JSON.');
-  }
-
-  const outreach = normalizeOutreach(parsed);
+  const outreach = normalizeOutreach(payload?.outreach ?? {});
 
   console.info('[getEmailBody] Outreach messages generated', { journalist: journalist.name });
 
