@@ -10,7 +10,7 @@ import { authService } from '@/services/authService';
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSwitchToRegister: () => void;
+  onSwitchToRegister: (opts?: { email?: string; step?: 'register' | 'verify' }) => void;
   onLoginSuccess: () => void;
 }
 
@@ -33,7 +33,12 @@ export const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onLoginSuccess
       setEmail('');
       setPassword('');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Login failed');
+      const message = error instanceof Error ? error.message : 'Login failed';
+      setError(message);
+      // If backend says email not verified, guide user to verification flow with prefilled email
+      if (/verify your email/i.test(message)) {
+        onSwitchToRegister({ email, step: 'verify' });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +110,7 @@ export const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onLoginSuccess
               Don’t have an account?{' '}
               <button
                 type="button"
-                onClick={onSwitchToRegister}
+                onClick={() => onSwitchToRegister()}
                 className="text-primary hover:underline"
               >
                 Create one

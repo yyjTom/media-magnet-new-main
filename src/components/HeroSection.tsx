@@ -151,9 +151,17 @@ export const HeroSection = ({
         <LoginModal
           isOpen={showLoginModal}
           onClose={() => setShowLoginModal(false)}
-          onSwitchToRegister={() => {
+          onSwitchToRegister={(opts) => {
             setShowLoginModal(false);
             setShowRegisterModal(true);
+            if (opts?.email) {
+              // Prefill email and jump to verify step when triggered from login
+              // We pass via local state through quick close/open cycle
+              setTimeout(() => {
+                const event = new CustomEvent('prefill-register', { detail: { email: opts.email, step: opts.step } });
+                window.dispatchEvent(event);
+              }, 0);
+            }
           }}
           onLoginSuccess={handleLoginSuccess}
         />
@@ -166,6 +174,9 @@ export const HeroSection = ({
             setShowLoginModal(true);
           }}
           onRegisterSuccess={handleLoginSuccess}
+          // Listen one-shot for prefill request dispatched from LoginModal
+          prefillEmail={(undefined as any)}
+          initialStep={(undefined as any)}
         />
       </div>
     </section>;

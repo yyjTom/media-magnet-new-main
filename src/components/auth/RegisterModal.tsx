@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,17 +12,30 @@ interface RegisterModalProps {
   onClose: () => void;
   onSwitchToLogin: () => void;
   onRegisterSuccess: () => void;
+  prefillEmail?: string;
+  initialStep?: 'register' | 'verify';
 }
 
-export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin, onRegisterSuccess }: RegisterModalProps) => {
-  const [step, setStep] = useState<'register' | 'verify'>('register');
-  const [email, setEmail] = useState('');
+export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin, onRegisterSuccess, prefillEmail, initialStep }: RegisterModalProps) => {
+  const [step, setStep] = useState<'register' | 'verify'>(initialStep ?? 'register');
+  const [email, setEmail] = useState(prefillEmail ?? '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Listen prefill events (from LoginModal) to open verify step with prefilled email
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { email?: string; step?: 'register' | 'verify' };
+      if (detail?.email) setEmail(detail.email);
+      if (detail?.step) setStep(detail.step);
+    };
+    window.addEventListener('prefill-register', handler as EventListener);
+    return () => window.removeEventListener('prefill-register', handler as EventListener);
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
