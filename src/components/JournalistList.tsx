@@ -88,7 +88,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       // 保存生成历史记录
       authService.saveGenerationHistory({
         url: website,
-        payload: data.journalists
+        payload: { journalists: data.journalists }
       }).catch(() => {
         // 保存失败不影响正常功能
         console.warn('Failed to save generation history');
