@@ -472,36 +472,21 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                     </Button>
                   </div>
 
-                  <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                    {journalist.sources.length > 0 && (
-                      <div>
-                        <span className="font-semibold text-foreground mr-2">Sources:</span>
-                        <span className="space-x-2">
-                          {journalist.sources.map((source, index) => (
-                            source.url ? (
-                              <a
-                                key={`${source.url}-${index}`}
-                                href={source.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:text-primary-glow"
-                              >
-                                {source.description}
-                              </a>
-                            ) : (
-                              <span key={`${source.url}-${index}`} className="text-muted-foreground/70">
-                                {source.description}
-                              </span>
-                            )
-                          ))}
-                        </span>
-                      </div>
-                    )}
-                  </div>
 
                   {isExpanded && (
                     <div className="mt-6 pt-6 border-t border-border">
                       <h4 className="font-semibold text-foreground mb-3">Personalized Outreach Drafts</h4>
+                      
+                      {/* Debug info */}
+                      {import.meta.env.DEV && (
+                        <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                          <div>Key: {journalistKey}</div>
+                          <div>Has outreach: {!!outreach ? 'YES' : 'NO'}</div>
+                          <div>Is loading: {isGeneratingOutreach ? 'YES' : 'NO'}</div>
+                          <div>Has error: {!!outreachError ? 'YES' : 'NO'}</div>
+                          {outreach && <div>Email length: {outreach.email?.length || 0}</div>}
+                        </div>
+                      )}
 
                       {isGeneratingOutreach && !outreach && (
                         <div className="bg-muted p-4 rounded-lg text-sm text-muted-foreground">
