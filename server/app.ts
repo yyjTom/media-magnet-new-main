@@ -14,7 +14,13 @@ const __dirname = path.dirname(__filename);
 // Explicitly load .env from project root
 const envPath = path.resolve(__dirname, '../.env');
 console.log('📁 Loading .env from:', envPath);
-dotenv.config({ path: envPath });
+
+// Clear any existing OPENAI_API_KEY to avoid conflicts
+delete process.env.OPENAI_API_KEY;
+
+// Load .env file and override existing env vars
+const result = dotenv.config({ path: envPath, override: true });
+console.log('📋 .env file loaded:', result.error ? `❌ ${result.error}` : '✅ Success');
 
 // Debug: Check if environment variables are loaded
 console.log('🔧 Environment variables loaded:');
