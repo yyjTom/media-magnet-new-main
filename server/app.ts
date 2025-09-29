@@ -22,6 +22,10 @@ delete process.env.OPENAI_API_KEY;
 const result = dotenv.config({ path: envPath, override: true });
 console.log('📋 .env file loaded:', result.error ? `❌ ${result.error}` : '✅ Success');
 
+// Configure Node.js for better network connectivity
+process.env.UV_THREADPOOL_SIZE = '16'; // Increase thread pool size
+console.log('🔧 Node.js configured for better network connectivity');
+
 // Debug: Check if environment variables are loaded
 console.log('🔧 Environment variables loaded:');
 console.log('- PORT:', process.env.PORT);

@@ -1,4 +1,5 @@
 import express from 'express';
+import axios from 'axios';
 
 const router = express.Router();
 
@@ -117,25 +118,28 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
         console.log('⏳ OpenAI request still processing... (this is normal for complex requests)');
       }, 30000); // Log every 30 seconds
       
-      const response = await fetch(OPENAI_ENDPOINT, {
-        method: 'POST',
+      // Use axios with better timeout control
+      const response = await axios.post(OPENAI_ENDPOINT, body, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
+          'User-Agent': 'Node.js/OpenAI-Client',
         },
-        body: JSON.stringify(body),
+        timeout: 120000, // 2 minutes timeout
         signal: controller.signal,
+        // Additional axios configuration for better connectivity
+        maxRedirects: 5,
+        validateStatus: (status) => status < 500, // Don't throw on 4xx errors
       });
       
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+      if (response.status >= 400) {
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${JSON.stringify(response.data)}`);
       }
       
-      return await response.json();
+      return response.data;
     } catch (error: any) {
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
