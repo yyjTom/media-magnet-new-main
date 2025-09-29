@@ -1,6 +1,8 @@
 import express from 'express';
 import axios from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import * as cheerio from 'cheerio';
+import puppeteer from 'puppeteer';
 
 const router = express.Router();
 
@@ -40,6 +42,78 @@ Return the data as strict JSON with a top-level "journalists" array of exactly $
 }
 
 Only return valid JSON. No extra commentary.`;
+};
+
+// ---------- Google搜索爬虫功能 ----------
+const getFirstGoogleSearchResult = async (query: string): Promise<string | null> => {
+  try {
+    console.log(`🔍 Searching Google for: "${query}"`);
+    
+    // 使用Puppeteer来获取Google搜索结果
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ]
+    });
+    
+    const page = await browser.newPage();
+    
+    // 设置用户代理，避免被Google阻止
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    
+    // 构建Google搜索URL
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=1`;
+    
+    // 访问Google搜索页面
+    await page.goto(searchUrl, { 
+      waitUntil: 'networkidle2',
+      timeout: 15000 
+    });
+    
+    // 等待搜索结果加载
+    await page.waitForSelector('div[data-ved]', { timeout: 10000 });
+    
+    // 提取第一个搜索结果的链接
+    const firstResultLink = await page.evaluate(() => {
+      // 查找第一个真实的搜索结果链接（不是广告）
+      const resultSelectors = [
+        'div[data-ved] a[href^="http"]:not([href*="googleadservices"])',
+        'h3 a[href^="http"]:not([href*="googleadservices"])',
+        '.g a[href^="http"]:not([href*="googleadservices"])',
+        '[data-ved] a[href^="http"]:not([href*="googleadservices"])'
+      ];
+      
+      for (const selector of resultSelectors) {
+        const element = document.querySelector(selector) as HTMLAnchorElement;
+        if (element && element.href && !element.href.includes('google.com') && !element.href.includes('googleadservices')) {
+          return element.href;
+        }
+      }
+      return null;
+    });
+    
+    await browser.close();
+    
+    if (firstResultLink) {
+      console.log(`✅ Found first Google result: ${firstResultLink}`);
+      return firstResultLink;
+    } else {
+      console.log(`❌ No valid search result found for: "${query}"`);
+      return null;
+    }
+    
+  } catch (error) {
+    console.error(`❌ Google search failed for "${query}":`, error);
+    return null;
+  }
 };
 
 const buildOutreachPrompt = ({
@@ -96,7 +170,7 @@ Ensure each value is a complete message for the specified channel, ready to send
 };
 
 // Normalize proxy URL from env to a valid URL string and build agent safely
-function getHttpsAgentFromEnv(): HttpsProxyAgent | undefined {
+function getHttpsAgentFromEnv(): HttpsProxyAgent<string> | undefined {
   try {
     const raw = (process.env.GEMINI_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
     if (!raw) return undefined;
@@ -184,9 +258,8 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
   console.log('✅ Using Gemini API key:', apiKey.substring(0, 7) + '...' + apiKey.substring(apiKey.length - 4));
 
   let lastError: any;
-  
-  let timeoutId: NodeJS.Timeout;
-  let progressInterval: NodeJS.Timeout;
+  let timeoutId: NodeJS.Timeout | undefined;
+  let progressInterval: NodeJS.Timeout | undefined;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -239,8 +312,8 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
         httpsAgent,
       });
       
-      clearTimeout(timeoutId);
-      clearInterval(progressInterval);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (progressInterval) clearInterval(progressInterval);
       
       if (response.status >= 400) {
         throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(response.data)}`);
@@ -277,8 +350,8 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
         throw new Error('Invalid Gemini response format');
       }
     } catch (error: any) {
-      clearTimeout(timeoutId);
-      clearInterval(progressInterval);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (progressInterval) clearInterval(progressInterval);
       lastError = error;
       console.error(`Gemini request attempt ${attempt + 1} failed:`, error.message);
       
@@ -335,18 +408,26 @@ router.post('/journalists', async (req, res) => {
       return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
     }
 
-    // Map the simplified schema to the app's expected schema for compatibility
-    const mapItem = (item: any) => {
+    // Map the simplified schema to the app's expected schema for compatibility and fetch Google search results
+    const mapItemWithSearch = async (item: any) => {
       const name = item?.name ?? '';
       const outlet = item?.outlet ?? item?.media ?? item?.parentMediaOrganization ?? '';
-      const articleLink = item?.article_link ?? item?.['article link'] ?? item?.coverageLink ?? '';
       const beat = item?.beat ?? '';
       const relevanceRaw = item?.relevance_score ?? item?.['relevance score'] ?? item?.relevanceScore ?? 0;
       const relevanceScore = Number.isFinite(Number(relevanceRaw)) ? Math.max(1, Math.min(100, Math.round(Number(relevanceRaw)))) : 0;
       const email = item?.email ?? null;
       const linkedIn = item?.linkedin ?? item?.linkedIn ?? null;
       const twitter = item?.x_handle ?? item?.twitter ?? null;
-      const coverageLink = typeof articleLink === 'string' ? articleLink : '';
+
+      // 尝试通过Google搜索获取真实的文章链接
+      let coverageLink = '';
+      if (name && outlet) {
+        const searchQuery = `"${name}" journalist "${outlet}"`;
+        const searchResult = await getFirstGoogleSearchResult(searchQuery);
+        if (searchResult) {
+          coverageLink = searchResult;
+        }
+      }
 
       return {
         name,
@@ -362,7 +443,18 @@ router.post('/journalists', async (req, res) => {
       };
     };
 
-    const journalists = Array.isArray(parsed?.journalists) ? parsed.journalists.map(mapItem) : [];
+    // 为所有记者异步获取Google搜索结果
+    const rawJournalists = Array.isArray(parsed?.journalists) ? parsed.journalists : [];
+    console.log(`🔍 Starting Google search for ${rawJournalists.length} journalists...`);
+    
+    const journalists = await Promise.all(
+      rawJournalists.map((item, index) => {
+        console.log(`🔍 Processing journalist ${index + 1}/${rawJournalists.length}: ${item?.name || 'Unknown'}`);
+        return mapItemWithSearch(item);
+      })
+    );
+    
+    console.log(`✅ Completed Google search for all journalists`);
     const totalTime = Date.now() - requestStartTime;
     console.log(`✅ Generated ${journalists.length} journalists in ${totalTime}ms`);
     return res.json({ journalists });
