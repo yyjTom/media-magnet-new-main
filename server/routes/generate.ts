@@ -430,7 +430,7 @@ router.post('/journalists', async (req, res) => {
       // 尝试通过Google搜索获取真实的文章链接
       let coverageLink = '';
       if (!skipSearch && name && outlet) {
-        const searchQuery = `"${name}" journalist "${outlet}"`;
+        const searchQuery = `${name} journalist ${outlet}`;
         const searchResult = await getFirstGoogleSearchResult(searchQuery);
         if (searchResult) {
           coverageLink = searchResult;
