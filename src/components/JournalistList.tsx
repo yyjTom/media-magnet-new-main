@@ -325,7 +325,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                       </div>
                       <p className="text-muted-foreground mb-3">
                         {journalist.coverageSummary}{' '}
-                        {journalist.coverageLink && (
+                        {journalist.coverageLink && journalist.coverageLink !== 'null' && (
                           <a
                             href={journalist.coverageLink}
                             target="_blank"

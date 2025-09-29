@@ -20,7 +20,26 @@ const buildPrompt = ({
 
   return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name, and link to the article. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle.
 
-Return the data as strict JSON with a top-level "journalists" array of exactly ${TARGET_JOURNALIST_COUNT} entries. with header of such order:name, outlet, article link, beat, relevance score, email, linkedin, x_handle`;
+CRITICAL REQUIREMENTS:
+- DO NOT generate fake or placeholder URLs 
+- If you cannot provide a real, verified article link, set article_link to null
+- Only include URLs you are absolutely certain exist and work
+- It's better to have null article_link than a broken 404 link
+- Focus on providing accurate journalist contact information
+
+Return the data as strict JSON with a top-level "journalists" array of exactly ${TARGET_JOURNALIST_COUNT} entries. Each entry MUST use these exact keys:
+{
+  "name": string,
+  "outlet": string, 
+  "article_link": string | null,
+  "beat": string | null,
+  "relevance_score": number (1-100),
+  "email": string | null,
+  "linkedin": string | null,
+  "x_handle": string | null
+}
+
+Only return valid JSON. No extra commentary.`;
 };
 
 const buildOutreachPrompt = ({
