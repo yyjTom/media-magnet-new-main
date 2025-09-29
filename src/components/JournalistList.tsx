@@ -77,11 +77,13 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
     }
 
     if (isError || !data?.journalists) {
-      callback([]);
+      // 延迟调用确保错误状态也能正确显示
+      setTimeout(() => callback([]), 100);
       return;
     }
 
-    callback(data.journalists);
+    // 延迟调用确保记者列表已经渲染到DOM中
+    setTimeout(() => callback(data.journalists), 200);
   }, [data?.journalists, isError]);
   
   const journalistsList = useMemo(() => data?.journalists ?? [], [data?.journalists]);
