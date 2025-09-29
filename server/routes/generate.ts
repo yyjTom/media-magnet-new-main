@@ -77,6 +77,9 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
       return null;
     }
     
+    // 调试：输出响应的前500个字符来检查内容
+    console.log(`📄 Google response preview for "${query}":`, response.data.substring(0, 500));
+    
     // 使用cheerio解析HTML
     const $ = cheerio.load(response.data);
     
@@ -84,20 +87,34 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
     const selectors = [
       'h3 a[href^="/url?q="]',
       '.g a[href^="/url?q="]',
-      'div[data-ved] a[href^="/url?q="]'
+      'div[data-ved] a[href^="/url?q="]',
+      'a[href^="/url?q="]', // 更宽泛的选择器
+      'h3 a[href]', // 更宽泛的选择器
+      '.g a[href]' // 更宽泛的选择器
     ];
+    
+    // 调试：检查页面中找到了多少个链接
+    console.log(`🔍 Found ${$('a').length} total links in response`);
+    console.log(`🔍 Found ${$('a[href^="/url?q="]').length} Google redirect links`);
+    console.log(`🔍 Found ${$('h3').length} h3 elements`);
+    console.log(`🔍 Found ${$('.g').length} .g elements`);
     
     for (const selector of selectors) {
       const elements = $(selector);
+      console.log(`🔍 Selector "${selector}" found ${elements.length} elements`);
+      
       for (let i = 0; i < elements.length; i++) {
         const element = elements.eq(i);
         const href = element.attr('href');
+        
+        console.log(`🔍 Checking href: ${href}`);
         
         if (href && href.startsWith('/url?q=')) {
           // 从Google的重定向URL中提取真实URL
           const urlMatch = href.match(/\/url\?q=([^&]+)/);
           if (urlMatch) {
             const decodedUrl = decodeURIComponent(urlMatch[1]);
+            console.log(`🔍 Decoded URL: ${decodedUrl}`);
             
             // 过滤掉无效的链接
             if (decodedUrl && 
@@ -111,6 +128,12 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
               return decodedUrl;
             }
           }
+        } else if (href && href.startsWith('http') && 
+                   !href.includes('google.com') && 
+                   !href.includes('googleadservices')) {
+          // 处理直接的HTTP链接（非Google重定向）
+          console.log(`✅ Found direct HTTP result: ${href}`);
+          return href;
         }
       }
     }
