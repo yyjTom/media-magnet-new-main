@@ -13,6 +13,7 @@ import {
   type OutreachMessages,
 } from '@/services/journalists';
 import { analytics } from '@/lib/analytics';
+import { authService } from '@/services/authService';
 
 interface JournalistListProps {
   website: string;
@@ -84,6 +85,15 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
 
     // 只有当记者列表有10条数据时才重置按钮状态
     if (data?.journalists && data.journalists.length === 10) {
+      // 保存生成历史记录
+      authService.saveGenerationHistory({
+        url: website,
+        payload: data.journalists
+      }).catch(() => {
+        // 保存失败不影响正常功能
+        console.warn('Failed to save generation history');
+      });
+      
       // 延迟调用确保记者列表已经渲染到DOM中
       setTimeout(() => callback(data.journalists), 200);
     }

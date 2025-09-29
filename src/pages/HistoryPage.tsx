@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { authService } from '@/services/authService';
 import { findJournalists } from '@/services/journalists';
 import { Journalist } from '@/services/journalists';
-import { Calendar, ExternalLink, RefreshCw, Clock, Globe, ArrowLeft } from 'lucide-react';
+import { Calendar, RefreshCw, Clock, Globe, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom';
 
@@ -167,15 +167,9 @@ export const HistoryPage: React.FC = () => {
                       <div className="flex-1">
                         <CardTitle className="text-lg flex items-center">
                           <Globe className="h-4 w-4 mr-2 text-primary" />
-                          <a
-                            href={item.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-primary transition-colors"
-                          >
+                          <span className="text-foreground">
                             {item.url}
-                          </a>
-                          <ExternalLink className="h-3 w-3 ml-1" />
+                          </span>
                         </CardTitle>
                         <div className="flex items-center mt-2 text-sm text-muted-foreground">
                           <Clock className="h-3 w-3 mr-1" />
