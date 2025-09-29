@@ -26,7 +26,7 @@ router.post('/register', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Email and password are required', code: 'MISSING_CREDENTIALS' });
     }
 
     // Validate email format
@@ -152,20 +152,20 @@ router.post('/login', async (req, res) => {
     );
 
     if (users.length === 0) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' });
     }
 
     const user = users[0];
 
     // Check email verified
     if (!user.email_verified) {
-      return res.status(401).json({ error: 'Please verify your email first' });
+      return res.status(401).json({ error: 'Please verify your email first', code: 'EMAIL_NOT_VERIFIED' });
     }
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' });
     }
 
     // Generate JWT token

@@ -35,7 +35,15 @@ export const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onLoginSuccess
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Login failed';
       setError(message);
-      // If backend says email not verified, guide user to verification flow with prefilled email
+      // Try to parse structured error code
+      try {
+        const maybeJson = JSON.parse(message);
+        if (maybeJson?.code === 'EMAIL_NOT_VERIFIED') {
+          onSwitchToRegister({ email, step: 'verify' });
+          return;
+        }
+      } catch {}
+      // Fallback to keyword detection
       if (/verify your email/i.test(message)) {
         onSwitchToRegister({ email, step: 'verify' });
       }
