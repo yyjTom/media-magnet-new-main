@@ -18,15 +18,22 @@ const buildPrompt = ({
     ? `${website} (If this is URL, visit its website to gain understanding)`
     : `${companyName || 'The company'} — ${companyDescription}`;
 
-  return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name and a real article link. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle. The returned result email must exist.
+  return `${subject} need to be covered by premier journalists in different media. Find and search 10 DIFFERENT journalists who have covered a product like this, and record the media outlet name and a real article link. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle. The returned result email must exist.
+
+DIVERSITY REQUIREMENTS:
+- Ensure ALL 10 journalists are completely different individuals
+- Do NOT repeat the same journalist multiple times
+- Prioritize journalists from different media outlets and backgrounds
+- Include a mix of established veterans and emerging voices
+- Avoid over-relying on the same well-known names (like Kara Swisher, Walt Mossberg, etc.)
+- Try to include journalists from various types of publications: mainstream tech blogs, business publications, specialized industry publications, podcasts, newsletters, etc.
+- Consider journalists with different specializations: enterprise tech, consumer tech, startups, AI/ML, cybersecurity, mobile, etc.
 
 CRITICAL REQUIREMENTS FOR ARTICLE LINKS:
 - For each journalist, perform a Google search using the exact query: "[journalist name] journalist"
-- Use the first search result URL as the article_link
-- The article_link should be the actual URL from the first Google search result
-- If no search results are found, set article_link to null
-- DO NOT generate fake or placeholder URLs
-- Only use real URLs that would appear as the first result when searching "[name] journalist" on Google
+- The first link address of "[journalist name] journalist" in Google search
+- Please do not provide a fictitious address
+- Please check whether the address can be opened and whether it is a 404 error
 
 SEARCH PROCESS FOR EACH JOURNALIST:
 1. Take the journalist's name (e.g., "David Pogue")
