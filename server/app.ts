@@ -1,27 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { initializeDatabase } from './config/database.js';
 import authRoutes from './routes/auth.js';
 import generateRoutes from './routes/generate.js';
 
-// Get the directory of the current module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // Load environment variables (only in development)
 if (process.env.NODE_ENV !== 'production') {
-  // Explicitly load .env from project root for development
-  const envPath = path.resolve(__dirname, '../.env');
-  console.log('📁 Loading .env from:', envPath);
-  
-  // Clear any existing OPENAI_API_KEY to avoid conflicts (dev only)
-  delete process.env.OPENAI_API_KEY;
-  
-  // Load .env file and override existing env vars
-  const result = dotenv.config({ path: envPath, override: true });
+  console.log('📋 Development mode: loading .env file');
+  const result = dotenv.config();
   console.log('📋 .env file loaded:', result.error ? `❌ ${result.error}` : '✅ Success');
 } else {
   console.log('📋 Production mode: using Vercel environment variables');
