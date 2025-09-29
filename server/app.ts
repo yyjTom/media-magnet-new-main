@@ -1,11 +1,20 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeDatabase } from './config/database.js';
 import authRoutes from './routes/auth.js';
 import generateRoutes from './routes/generate.js';
 
-dotenv.config();
+// Get the directory of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Explicitly load .env from project root
+const envPath = path.resolve(__dirname, '../.env');
+console.log('📁 Loading .env from:', envPath);
+dotenv.config({ path: envPath });
 
 // Debug: Check if environment variables are loaded
 console.log('🔧 Environment variables loaded:');
