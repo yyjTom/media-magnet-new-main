@@ -147,10 +147,9 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       getEmailBody({ journalist, companyName, companyDescription, website }),
   });
 
-  // 自动预取所有记者的 outreach，根据状态控制按钮显示
+  // 自动预取所有记者的 outreach，逐个依次调用
   useEffect(() => {
     let cancelled = false;
-    const CONCURRENCY = 3; // 降低并发数避免过载
 
     const toKey = (j: Journalist, idx: number) => `${j.email ?? j.coverageLink ?? j.name}-${idx}`;
 
@@ -160,36 +159,45 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
 
     if (tasks.length === 0) return;
 
-    const runBatch = async (batch: typeof tasks) => {
-      await Promise.all(
-        batch.map(async ({ j, idx, key }) => {
-          if (cancelled) return;
-          setOutreachLoading((prev) => ({ ...prev, [key]: true }));
-          try {
-            const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
-            if (cancelled) return;
-            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
-            setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
-          } catch (e) {
-            if (cancelled) return;
-            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
-            const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
-            setOutreachErrors((prev) => ({ ...prev, [key]: message }));
-          }
-        })
-      );
-    };
+    console.log(`Starting outreach generation for ${tasks.length} journalists`);
 
     (async () => {
-      for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+      for (let i = 0; i < tasks.length; i++) {
         if (cancelled) break;
-        const batch = tasks.slice(i, i + CONCURRENCY);
-        await runBatch(batch);
+        
+        const { j, idx, key } = tasks[i];
+        console.log(`Processing journalist ${i + 1}/${tasks.length}: ${j.name} (key: ${key})`);
+        
+        setOutreachLoading((prev) => ({ ...prev, [key]: true }));
+        
+        try {
+          const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
+          if (cancelled) return;
+          
+          console.log(`✅ Success for ${j.name}:`, outreach);
+          setOutreachLoading((prev) => ({ ...prev, [key]: false }));
+          setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
+        } catch (e) {
+          if (cancelled) return;
+          
+          const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
+          console.log(`❌ Error for ${j.name}:`, message);
+          setOutreachLoading((prev) => ({ ...prev, [key]: false }));
+          setOutreachErrors((prev) => ({ ...prev, [key]: message }));
+        }
+        
+        // 每个请求之间稍微延迟，避免过载
+        if (!cancelled && i < tasks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+      
+      console.log('All outreach generation completed');
     })();
 
     return () => {
       cancelled = true;
+      console.log('Outreach generation cancelled');
     };
   }, [journalistsList, companyName, companyDescription, website, outreachMessages, outreachLoading, outreachErrors]);
 
