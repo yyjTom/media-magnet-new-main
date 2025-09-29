@@ -202,6 +202,14 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
       
       // Convert messages to Gemini format
       const prompt = messages.map(msg => msg.content).join('\n\n');
+      
+      // 打印发送给 Gemini 的提示词
+      console.log('='.repeat(80));
+      console.log('📤 PROMPT SENT TO GEMINI:');
+      console.log('='.repeat(80));
+      console.log(prompt);
+      console.log('='.repeat(80));
+      
       const geminiBody = {
         contents: [{
           parts: [{ text: prompt }]
@@ -240,11 +248,28 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
       
       // Convert Gemini response to OpenAI-like format for compatibility
       const geminiResponse = response.data;
+      
+      // 打印 Gemini 返回的原始结果
+      console.log('='.repeat(80));
+      console.log('📥 RAW RESPONSE FROM GEMINI:');
+      console.log('='.repeat(80));
+      console.log(JSON.stringify(geminiResponse, null, 2));
+      console.log('='.repeat(80));
+      
       if (geminiResponse.candidates && geminiResponse.candidates[0] && geminiResponse.candidates[0].content) {
+        const content = geminiResponse.candidates[0].content.parts[0].text;
+        
+        // 打印提取的文本内容
+        console.log('='.repeat(80));
+        console.log('📄 EXTRACTED TEXT CONTENT:');
+        console.log('='.repeat(80));
+        console.log(content);
+        console.log('='.repeat(80));
+        
         return {
           choices: [{
             message: {
-              content: geminiResponse.candidates[0].content.parts[0].text
+              content: content
             }
           }]
         };
