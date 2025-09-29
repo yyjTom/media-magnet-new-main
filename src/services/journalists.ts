@@ -122,11 +122,11 @@ export async function findJournalists({
     });
     
     // Provide user-friendly error messages
-    if (errorData.code === 'OPENAI_TIMEOUT') {
-      throw new Error('请求超时，OpenAI 服务响应较慢，请稍后重试。');
-    } else if (errorData.code === 'OPENAI_CONNECTION_ERROR') {
-      throw new Error('网络连接问题，无法访问 OpenAI 服务，请检查网络连接。');
-    } else if (errorData.code === 'OPENAI_MISSING_KEY') {
+    if (errorData.code === 'GEMINI_TIMEOUT') {
+      throw new Error('请求超时，Gemini 服务响应较慢，请稍后重试。');
+    } else if (errorData.code === 'GEMINI_CONNECTION_ERROR') {
+      throw new Error('网络连接问题，无法访问 Gemini 服务，请检查网络连接。');
+    } else if (errorData.code === 'GEMINI_MISSING_KEY') {
       throw new Error('服务器配置错误，请联系管理员。');
     }
     
@@ -379,11 +379,11 @@ export async function getEmailBody({
     });
     
     // Provide user-friendly error messages
-    if (errorData.code === 'OPENAI_TIMEOUT') {
-      throw new Error('请求超时，OpenAI 服务响应较慢，请稍后重试。');
-    } else if (errorData.code === 'OPENAI_CONNECTION_ERROR') {
-      throw new Error('网络连接问题，无法访问 OpenAI 服务，请检查网络连接。');
-    } else if (errorData.code === 'OPENAI_MISSING_KEY') {
+    if (errorData.code === 'GEMINI_TIMEOUT') {
+      throw new Error('请求超时，Gemini 服务响应较慢，请稍后重试。');
+    } else if (errorData.code === 'GEMINI_CONNECTION_ERROR') {
+      throw new Error('网络连接问题，无法访问 Gemini 服务，请检查网络连接。');
+    } else if (errorData.code === 'GEMINI_MISSING_KEY') {
       throw new Error('服务器配置错误，请联系管理员。');
     }
     

@@ -3,8 +3,8 @@ import axios from 'axios';
 
 const router = express.Router();
 
-const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_MODEL = 'gpt-4o-mini';
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+const GEMINI_MODEL = 'gemini-pro';
 const TARGET_JOURNALIST_COUNT = 20;
 
 // ---------- Shared prompt builders ----------
@@ -90,16 +90,16 @@ Return the result as JSON with this exact shape:
 Ensure each value is a single concise message for the specified channel, ready to send.`;
 };
 
-// Helper function for OpenAI requests with timeout and retry
-async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
-  const apiKey = process.env.PRESS_OPENAI_API_KEY;
+// Helper function for Gemini requests with timeout and retry
+async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error('❌ PRESS_OPENAI_API_KEY not found in environment variables');
-    console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('OPENAI')));
-    throw new Error('OpenAI API key not configured');
+    console.error('❌ GEMINI_API_KEY not found in environment variables');
+    console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('GEMINI')));
+    throw new Error('Gemini API key not configured');
   }
   
-  console.log('✅ Using OpenAI API key:', apiKey.substring(0, 7) + '...' + apiKey.substring(apiKey.length - 4));
+  console.log('✅ Using Gemini API key:', apiKey.substring(0, 7) + '...' + apiKey.substring(apiKey.length - 4));
 
   let lastError: any;
   
@@ -108,22 +108,35 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`OpenAI request attempt ${attempt + 1}/${maxRetries + 1}`);
+      console.log(`Gemini request attempt ${attempt + 1}/${maxRetries + 1}`);
       
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
       
       // Add progress logging
       progressInterval = setInterval(() => {
-        console.log('⏳ OpenAI request still processing... (this is normal for complex requests)');
+        console.log('⏳ Gemini request still processing... (this is normal for complex requests)');
       }, 30000); // Log every 30 seconds
       
+      // Convert messages to Gemini format
+      const prompt = messages.map(msg => msg.content).join('\n\n');
+      const geminiBody = {
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192,
+        }
+      };
+      
       // Use axios with better timeout control
-      const response = await axios.post(OPENAI_ENDPOINT, body, {
+      const response = await axios.post(`${GEMINI_ENDPOINT}?key=${apiKey}`, geminiBody, {
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'User-Agent': 'Node.js/OpenAI-Client',
+          'User-Agent': 'Node.js/Gemini-Client',
         },
         timeout: 120000, // 2 minutes timeout
         signal: controller.signal,
@@ -136,15 +149,27 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
       clearInterval(progressInterval);
       
       if (response.status >= 400) {
-        throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${JSON.stringify(response.data)}`);
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(response.data)}`);
       }
       
-      return response.data;
+      // Convert Gemini response to OpenAI-like format for compatibility
+      const geminiResponse = response.data;
+      if (geminiResponse.candidates && geminiResponse.candidates[0] && geminiResponse.candidates[0].content) {
+        return {
+          choices: [{
+            message: {
+              content: geminiResponse.candidates[0].content.parts[0].text
+            }
+          }]
+        };
+      } else {
+        throw new Error('Invalid Gemini response format');
+      }
     } catch (error: any) {
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
       lastError = error;
-      console.error(`OpenAI request attempt ${attempt + 1} failed:`, error.message);
+      console.error(`Gemini request attempt ${attempt + 1} failed:`, error.message);
       
       // If it's the last attempt or a non-retryable error, throw
       if (attempt === maxRetries || (error.name !== 'AbortError' && !error.message.includes('timeout') && !error.message.includes('ECONNRESET') && !error.message.includes('ENOTFOUND'))) {
@@ -175,33 +200,28 @@ router.post('/journalists', async (req, res) => {
 
     console.log('Generating journalists for:', { website, companyName });
 
-    const payload = await callOpenAI({
-      model: OPENAI_MODEL,
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a meticulous media researcher who only responds with valid JSON and never includes commentary outside of the JSON object.',
-        },
-        {
-          role: 'user',
-          content: buildPrompt({ website, companyName, companyDescription }),
-        },
-      ],
-    });
+    const payload = await callGemini([
+      {
+        role: 'system',
+        content: 'You are a meticulous media researcher who only responds with valid JSON and never includes commentary outside of the JSON object.',
+      },
+      {
+        role: 'user',
+        content: buildPrompt({ website, companyName, companyDescription }),
+      },
+    ]);
 
     const rawContent = payload?.choices?.[0]?.message?.content;
     if (typeof rawContent !== 'string') {
-      return res.status(500).json({ error: 'Unexpected OpenAI response format' });
+      return res.status(500).json({ error: 'Unexpected Gemini response format' });
     }
 
     let parsed: any;
     try {
       parsed = JSON.parse(rawContent);
     } catch (e) {
-      console.error('Failed to parse OpenAI JSON:', rawContent);
-      return res.status(500).json({ error: 'Failed to parse OpenAI JSON response' });
+      console.error('Failed to parse Gemini JSON:', rawContent);
+      return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
     }
 
     const journalists = Array.isArray(parsed?.journalists) ? parsed.journalists : [];
@@ -215,22 +235,22 @@ router.post('/journalists', async (req, res) => {
     // Provide more specific error messages
     if (error.name === 'AbortError' || error.message.includes('timeout')) {
       return res.status(504).json({ 
-        error: 'Request timeout - OpenAI API is taking too long to respond. Please try again.',
-        code: 'OPENAI_TIMEOUT',
+        error: 'Request timeout - Gemini API is taking too long to respond. Please try again.',
+        code: 'GEMINI_TIMEOUT',
         duration: `${totalTime}ms`
       });
     }
     
     if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
       return res.status(503).json({ 
-        error: 'Unable to connect to OpenAI API. Please check your network connection.',
-        code: 'OPENAI_CONNECTION_ERROR'
+        error: 'Unable to connect to Gemini API. Please check your network connection.',
+        code: 'GEMINI_CONNECTION_ERROR'
       });
     }
     
     return res.status(500).json({ 
       error: 'Failed to generate journalists. Please try again.',
-      code: 'OPENAI_ERROR',
+      code: 'GEMINI_ERROR',
       detail: error.message
     });
   }
@@ -252,33 +272,28 @@ router.post('/outreach', async (req, res) => {
 
     console.log('Generating outreach for:', { journalistName: journalist?.name, companyName });
 
-    const payload = await callOpenAI({
-      model: OPENAI_MODEL,
-      temperature: 0.4,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a concise PR copywriter who only responds with valid JSON matching the requested schema.',
-        },
-        {
-          role: 'user',
-          content: buildOutreachPrompt({ journalist, companyName, companyDescription, website }),
-        },
-      ],
-    });
+    const payload = await callGemini([
+      {
+        role: 'system',
+        content: 'You are a concise PR copywriter who only responds with valid JSON matching the requested schema.',
+      },
+      {
+        role: 'user',
+        content: buildOutreachPrompt({ journalist, companyName, companyDescription, website }),
+      },
+    ]);
 
     const rawContent = payload?.choices?.[0]?.message?.content;
     if (typeof rawContent !== 'string') {
-      return res.status(500).json({ error: 'Unexpected OpenAI response format' });
+      return res.status(500).json({ error: 'Unexpected Gemini response format' });
     }
 
     let parsed: any;
     try {
       parsed = JSON.parse(rawContent);
     } catch (e) {
-      console.error('Failed to parse OpenAI JSON:', rawContent);
-      return res.status(500).json({ error: 'Failed to parse OpenAI JSON response' });
+      console.error('Failed to parse Gemini JSON:', rawContent);
+      return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
     }
 
     console.log('Generated outreach messages for:', journalist?.name);
@@ -296,39 +311,51 @@ router.post('/outreach', async (req, res) => {
     
     if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
       return res.status(503).json({ 
-        error: 'Unable to connect to OpenAI API. Please check your network connection.',
-        code: 'OPENAI_CONNECTION_ERROR'
+        error: 'Unable to connect to Gemini API. Please check your network connection.',
+        code: 'GEMINI_CONNECTION_ERROR'
       });
     }
     
     return res.status(500).json({ 
       error: 'Failed to generate outreach messages. Please try again.',
-      code: 'OPENAI_ERROR',
+      code: 'GEMINI_ERROR',
       detail: error.message
     });
   }
 });
 
-// Debug endpoint to test OpenAI connectivity
-router.get('/test-openai', async (req, res) => {
+// Debug endpoint to test Gemini connectivity
+router.get('/test-gemini', async (req, res) => {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ 
-        error: 'OpenAI API key not configured',
-        envVars: Object.keys(process.env).filter(k => k.includes('OPENAI'))
+        error: 'Gemini API key not configured',
+        envVars: Object.keys(process.env).filter(k => k.includes('GEMINI'))
       });
     }
 
-    console.log('🧪 Testing OpenAI connectivity...');
+    console.log('🧪 Testing Gemini connectivity...');
     const startTime = Date.now();
     
     try {
-      const response = await fetch('https://api.openai.com/v1/models', {
+      const testBody = {
+        contents: [{
+          parts: [{ text: 'Hello, respond with "OK" if you can hear me.' }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 10,
+        }
+      };
+
+      const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
           'User-Agent': 'Node.js'
         },
+        body: JSON.stringify(testBody),
         signal: AbortSignal.timeout(60000) // 60s timeout for test
       });
       
@@ -339,12 +366,12 @@ router.get('/test-openai', async (req, res) => {
         return res.json({
           success: true,
           duration: `${duration}ms`,
-          modelsCount: data.data?.length || 0,
+          response: data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response',
           apiKeyPrefix: apiKey.substring(0, 7) + '...'
         });
       } else {
         return res.status(response.status).json({
-          error: 'OpenAI API error',
+          error: 'Gemini API error',
           status: response.status,
           statusText: response.statusText,
           duration: `${duration}ms`
@@ -352,7 +379,7 @@ router.get('/test-openai', async (req, res) => {
       }
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      console.error('OpenAI connectivity test failed:', error);
+      console.error('Gemini connectivity test failed:', error);
       
       // More detailed error information
       let errorDetails: any = {
@@ -370,7 +397,7 @@ router.get('/test-openai', async (req, res) => {
       if (error.code === 'ENOTFOUND') {
         errorDetails.suggestion = 'DNS resolution failed. Check internet connection or DNS settings.';
       } else if (error.code === 'ECONNREFUSED') {
-        errorDetails.suggestion = 'Connection refused. Check if OpenAI API is accessible.';
+        errorDetails.suggestion = 'Connection refused. Check if Gemini API is accessible.';
       } else if (error.code === 'ETIMEDOUT' || error.name === 'AbortError') {
         errorDetails.suggestion = 'Request timeout. Check network speed or try again.';
       }
@@ -378,7 +405,7 @@ router.get('/test-openai', async (req, res) => {
       return res.status(500).json(errorDetails);
     }
   } catch (error: any) {
-    console.error('OpenAI connectivity test failed:', error);
+    console.error('Gemini connectivity test failed:', error);
     return res.status(500).json({
       error: error.message,
       type: error.constructor.name,
