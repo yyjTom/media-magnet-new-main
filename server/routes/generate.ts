@@ -302,30 +302,59 @@ router.get('/test-openai', async (req, res) => {
     console.log('🧪 Testing OpenAI connectivity...');
     const startTime = Date.now();
     
-    const response = await fetch('https://api.openai.com/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      signal: AbortSignal.timeout(15000) // 15s timeout for test
-    });
-    
-    const duration = Date.now() - startTime;
-    
-    if (response.ok) {
-      const data = await response.json();
-      return res.json({
-        success: true,
+    try {
+      const response = await fetch('https://api.openai.com/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'Node.js'
+        },
+        signal: AbortSignal.timeout(15000) // 15s timeout for test
+      });
+      
+      const duration = Date.now() - startTime;
+      
+      if (response.ok) {
+        const data = await response.json();
+        return res.json({
+          success: true,
+          duration: `${duration}ms`,
+          modelsCount: data.data?.length || 0,
+          apiKeyPrefix: apiKey.substring(0, 7) + '...'
+        });
+      } else {
+        return res.status(response.status).json({
+          error: 'OpenAI API error',
+          status: response.status,
+          statusText: response.statusText,
+          duration: `${duration}ms`
+        });
+      }
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      console.error('OpenAI connectivity test failed:', error);
+      
+      // More detailed error information
+      let errorDetails = {
+        error: error.message || 'Unknown error',
+        type: error.constructor.name,
+        code: error.code,
         duration: `${duration}ms`,
-        modelsCount: data.data?.length || 0,
-        apiKeyPrefix: apiKey.substring(0, 7) + '...'
-      });
-    } else {
-      return res.status(response.status).json({
-        error: 'OpenAI API error',
-        status: response.status,
-        statusText: response.statusText,
-        duration: `${duration}ms`
-      });
+      };
+      
+      // Add specific error details
+      if (error.cause) {
+        errorDetails.cause = error.cause.message || error.cause;
+      }
+      
+      if (error.code === 'ENOTFOUND') {
+        errorDetails.suggestion = 'DNS resolution failed. Check internet connection or DNS settings.';
+      } else if (error.code === 'ECONNREFUSED') {
+        errorDetails.suggestion = 'Connection refused. Check if OpenAI API is accessible.';
+      } else if (error.code === 'ETIMEDOUT' || error.name === 'AbortError') {
+        errorDetails.suggestion = 'Request timeout. Check network speed or try again.';
+      }
+      
+      return res.status(500).json(errorDetails);
     }
   } catch (error: any) {
     console.error('OpenAI connectivity test failed:', error);
