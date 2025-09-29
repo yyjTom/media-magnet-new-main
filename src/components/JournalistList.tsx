@@ -446,17 +446,6 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                   {isExpanded && (
                     <div className="mt-6 pt-6 border-t border-border">
                       
-                      {/* Debug info */}
-                      {import.meta.env.DEV && (
-                        <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                          <div>Key: {journalistKey}</div>
-                          <div>Has outreach: {!!outreach ? 'YES' : 'NO'}</div>
-                          <div>Is loading: {isGeneratingOutreach ? 'YES' : 'NO'}</div>
-                          <div>Has error: {!!outreachError ? 'YES' : 'NO'}</div>
-                          <div>State: {JSON.stringify(state)}</div>
-                          {outreach && <div>Email preview: {outreach.email?.substring(0, 50)}...</div>}
-                        </div>
-                      )}
 
                       {isGeneratingOutreach && !outreach && (
                         <div className="bg-muted p-4 rounded-lg text-sm text-muted-foreground">
