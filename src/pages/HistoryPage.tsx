@@ -27,6 +27,7 @@ interface WebsiteHistoryItem {
 export const HistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
+  // Removed website-only history due to mixed input (URL or description)
   const [websiteHistory, setWebsiteHistory] = useState<WebsiteHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState<number | null>(null);
@@ -42,10 +43,10 @@ export const HistoryPage: React.FC = () => {
       setLoading(true);
       const [genHistory, webHistory] = await Promise.all([
         authService.getGenerationHistory(),
-        authService.getWebsiteHistory()
+        Promise.resolve([])
       ]);
       setGenerationHistory(genHistory);
-      setWebsiteHistory(webHistory);
+      setWebsiteHistory([]);
     } catch (error) {
       console.error('Failed to load history:', error);
       toast({
@@ -143,7 +144,7 @@ export const HistoryPage: React.FC = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {/* Generation History */}
         <div>
           <h2 className="text-2xl font-semibold mb-4 flex items-center">
@@ -221,47 +222,7 @@ export const HistoryPage: React.FC = () => {
           )}
         </div>
 
-        {/* Website History */}
-        <div>
-          <h2 className="text-2xl font-semibold mb-4 flex items-center">
-            <Globe className="h-6 w-6 mr-2" />
-            Searched Websites
-          </h2>
-          
-          {websiteHistory.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center text-muted-foreground">
-                No website search history found.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {websiteHistory.map((item) => (
-                <Card key={item.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:text-primary-glow transition-colors font-medium"
-                        >
-                          {item.url}
-                        </a>
-                        <div className="flex items-center mt-1 text-sm text-muted-foreground">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {formatDate(item.createdAt)}
-                        </div>
-                      </div>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Website History removed */}
       </div>
 
       <Separator className="my-8" />
