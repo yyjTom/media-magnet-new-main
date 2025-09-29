@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronUp, Mail, Twitter, Linkedin, Instagram } from 'lucide-react';
+import { ChevronDown, ChevronUp, Mail, Twitter, Linkedin, Instagram, Search } from 'lucide-react';
 import {
   findJournalists,
   getEmailBody,
@@ -298,6 +298,13 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
               analytics.profileLinkClicked({ journalistName, organization, platform });
             };
 
+            const handleGoogleSearch = () => {
+              const searchQuery = `${journalist.name} journalist`;
+              const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+              analytics.coverageLinkClicked({ journalistName, organization });
+              window.open(googleUrl, '_blank', 'noopener,noreferrer');
+            };
+
             const handleCopyEmail = () => {
               if (!outreach) {
                 return;
@@ -417,6 +424,14 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                             Instagram
                           </a>
                         )}
+                        <button
+                          onClick={handleGoogleSearch}
+                          className="inline-flex items-center gap-2 text-primary hover:text-primary-glow smooth-transition bg-transparent border-0 cursor-pointer p-0 font-inherit text-sm"
+                          aria-label={`Search Google for ${journalist.name} journalist`}
+                        >
+                          <Search className="h-4 w-4" />
+                          Search Google
+                        </button>
                       </div>
                     </div>
 
