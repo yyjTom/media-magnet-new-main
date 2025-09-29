@@ -31,6 +31,13 @@ console.log('- RESEND_API_KEY:', process.env.RESEND_API_KEY ? '✅ SET' : '❌ N
 
 export const app = express();
 
+// Set server timeout to 3 minutes (180 seconds)
+app.use((req, res, next) => {
+  req.setTimeout(180000); // 3 minutes
+  res.setTimeout(180000); // 3 minutes
+  next();
+});
+
 app.use(cors({
   origin: (
     process.env.FRONTEND_URL

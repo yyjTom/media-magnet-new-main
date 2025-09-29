@@ -156,6 +156,9 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
 
 // ---------- Journalists generation ----------
 router.post('/journalists', async (req, res) => {
+  const requestStartTime = Date.now();
+  console.log('🚀 Journalists generation request received at:', new Date().toISOString());
+  
   try {
     const { website = '', companyName = 'Your Company', companyDescription = 'A high-growth technology startup building innovative products.' } = (req.body || {}) as {
       website?: string;
@@ -195,16 +198,19 @@ router.post('/journalists', async (req, res) => {
     }
 
     const journalists = Array.isArray(parsed?.journalists) ? parsed.journalists : [];
-    console.log(`Generated ${journalists.length} journalists`);
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`✅ Generated ${journalists.length} journalists in ${totalTime}ms`);
     return res.json({ journalists });
   } catch (error: any) {
-    console.error('Generate journalists failed:', error);
+    const totalTime = Date.now() - requestStartTime;
+    console.error(`❌ Generate journalists failed after ${totalTime}ms:`, error);
     
     // Provide more specific error messages
     if (error.name === 'AbortError' || error.message.includes('timeout')) {
       return res.status(504).json({ 
         error: 'Request timeout - OpenAI API is taking too long to respond. Please try again.',
-        code: 'OPENAI_TIMEOUT'
+        code: 'OPENAI_TIMEOUT',
+        duration: `${totalTime}ms`
       });
     }
     
