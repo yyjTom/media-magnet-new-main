@@ -18,21 +18,9 @@ const buildPrompt = ({
     ? `${website} (If this is URL, visit its website to gain understanding)`
     : `${companyName || 'The company'} — ${companyDescription}`;
 
-  return `${subject} need to be covered by premier journalists in different media. Find and search ${TARGET_JOURNALIST_COUNT} different journalists who have covered a product like this, and record the media outlet name, and link to the article. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle.
+  return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name, and link to the article. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle.
 
-Return the data as strict JSON with a top-level "journalists" array of exactly ${TARGET_JOURNALIST_COUNT} entries. Each entry MUST use these exact keys (snake_case where shown) and null when unavailable, and include absolute URLs:
-{
-  "name": string,
-  "outlet": string,
-  "article_link": string,
-  "beat": string | null,
-  "relevance_score": number,
-  "email": string | null,
-  "linkedin": string | null,
-  "x_handle": string | null
-}
-
-Only return the JSON. No extra commentary.`;
+Return the data as strict JSON with a top-level "journalists" array of exactly ${TARGET_JOURNALIST_COUNT} entries. with header of such order:name, outlet, article link, beat, relevance score, email, linkedin, x_handle`;
 };
 
 const buildOutreachPrompt = ({
@@ -58,7 +46,10 @@ const buildOutreachPrompt = ({
     .map((source: any, index: number) => `${index + 1}. ${source.description} (${source.url})`)
     .join('\n');
 
-  return `Draft a personalised outreach plan for journalist ${journalist.name} at ${journalist.parentMediaOrganization}. The startup is ${companyName} (${website}) with this description: ${companyDescription}.
+  return `For the first entry in the above JSON Draft a personalized message to each one of them, by keeping your focus on:
+
+Journalist: ${journalist.name} at ${journalist.parentMediaOrganization}
+Company: ${companyName} (${website}) - ${companyDescription}
 
 Important context about the journalist:
 - Recent coverage summary: ${journalist.coverageSummary}
@@ -66,14 +57,12 @@ Important context about the journalist:
 ${handleSummary ? `- Handles:\n${handleSummary}` : ''}
 ${sourceSummary ? `- Additional sources:\n${sourceSummary}` : ''}
 
-Your objectives:
-- Analyze the founder’s experience and their product, craft unique and extremely coverage angles tailored for this journalist.
-- Be personalised in the messaging, be extremely concise, and hook the journalist with the first sentence.
-- Demonstrate you have read a previous article they covered with similar or related topics.
-- Pitch an angle to cover the story.
-- Pitch the story by offering an exclusive interview or exclusive angle to be reported.
-- Tailor many messages: email cold reach, X direct message, X public post (@their user handles directly), LinkedIn direct message, LinkedIn public post (@their user handles directly).
-- Do not use any em dashes or arrows in the responses.
+- Search and analyze the company founder's experience and their product, craft unique and extremely insightful coverage angles tailored for each journalist.
+- Be hyper-personalized in the cold outreach for each journalist, be extremely concise, and hook the journalist with the first sentence.
+- Demonstrate you have read a previous article they covered before with similar are related topics
+- Pitch an unique angle to cover the story
+- Must weave in the founder or the companies' unique strength, value proposition, or the connection to the journalists interests .Must tie back to why they want to be reported (not generic "coverage"). Keep it short, punchy, and scrappy. But keep it PROFESSIONAL. Each email must include: subject line, greeting, 3–4 sentence body, and a bold CTA asking to be reported or interviewed. Language must feel direct, confident, and a little cheeky (not stiff like a cover letter).
+- Tailor messages, for email cold reach, X DM, X public post (@their user handles directly), and LinkedIn DM message, LinkedIn public post (@their user handles directly). Return the response in plain text
 
 Return the result as JSON with this exact shape:
 {
@@ -84,7 +73,7 @@ Return the result as JSON with this exact shape:
   "linkedInPublicPost": string
 }
 
-Ensure each value is a single concise message for the specified channel, ready to send.`;
+Ensure each value is a complete message for the specified channel, ready to send.`;
 };
 
 // Normalize proxy URL from env to a valid URL string and build agent safely
