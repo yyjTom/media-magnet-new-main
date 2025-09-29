@@ -325,7 +325,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                       </div>
                       <p className="text-muted-foreground mb-3">
                         {journalist.coverageSummary}{' '}
-                        {journalist.coverageLink && journalist.coverageLink !== 'null' && (
+                        {journalist.coverageLink && journalist.coverageLink !== 'null' ? (
                           <a
                             href={journalist.coverageLink}
                             target="_blank"
@@ -334,6 +334,16 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                             onClick={handleCoverageClick}
                           >
                             Read coverage ↗
+                          </a>
+                        ) : (
+                          <a
+                            href={`https://www.google.com/search?q=${encodeURIComponent(`"${journalist.name}" journalist "${journalist.parentMediaOrganization}"`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:text-primary-glow"
+                            onClick={handleCoverageClick}
+                          >
+                            Search articles ↗
                           </a>
                         )}
                       </p>

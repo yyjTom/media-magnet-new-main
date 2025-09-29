@@ -18,22 +18,14 @@ const buildPrompt = ({
     ? `${website} (If this is URL, visit its website to gain understanding)`
     : `${companyName || 'The company'} — ${companyDescription}`;
 
-  return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name, and link to the article. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle.
+  return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle. The returned result email must exist.
 
-CRITICAL REQUIREMENTS FOR ARTICLE LINKS:
-- For each journalist, perform a Google search using this exact format: "[journalist name] journalist [media outlet]"
-- Use the first search result URL as the article_link
-- If no search results are found, set article_link to null
-- DO NOT generate fake or placeholder URLs
-- Only use real URLs from actual Google search results
-- Focus on providing accurate journalist contact information
-- The returned result email must exist
-
-SEARCH PROCESS:
-1. Take the journalist's name and media outlet
-2. Search Google with: "[name] journalist [outlet]"
-3. Use the first result's URL as article_link
-4. If no results found, set article_link to null
+CRITICAL REQUIREMENTS:
+- ALWAYS set article_link to null (do not generate any URLs)
+- Focus on providing accurate journalist contact information and media outlet names
+- Provide real, verified email addresses when possible
+- Include the journalist's beat/specialty area
+- Ensure all contact information is current and accurate
 
 Return the data as strict JSON with a top-level "journalists" array of exactly ${TARGET_JOURNALIST_COUNT} entries. Each entry MUST use these exact keys:
 {
