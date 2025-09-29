@@ -459,7 +459,6 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                       size="sm"
                       onClick={() => toggleExpanded(journalistKey, journalist)}
                       className="whitespace-nowrap"
-                      disabled={isGeneratingOutreach && !isExpanded}
                     >
                       {isExpanded ? (
                         <>
