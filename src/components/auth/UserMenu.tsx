@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { User, LogOut, Settings, History } from 'lucide-react';
+import { LogOut, History } from 'lucide-react';
 import { authService, type User as UserType } from '@/services/authService';
 import { useNavigate } from 'react-router-dom';
 
@@ -53,18 +53,9 @@ export const UserMenu = ({ user, onLogout }: UserMenuProps) => {
             )}
           </div>
         </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <User className="mr-2 h-4 w-4" />
-          <span>Profile</span>
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={handleHistoryClick}>
           <History className="mr-2 h-4 w-4" />
           <span>History</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings className="mr-2 h-4 w-4" />
-          <span>Settings</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
