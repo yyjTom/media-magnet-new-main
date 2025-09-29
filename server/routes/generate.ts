@@ -102,15 +102,18 @@ async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
 
   let lastError: any;
   
+  let timeoutId: NodeJS.Timeout;
+  let progressInterval: NodeJS.Timeout;
+  
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       console.log(`OpenAI request attempt ${attempt + 1}/${maxRetries + 1}`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
+      timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
       
       // Add progress logging
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         console.log('⏳ OpenAI request still processing... (this is normal for complex requests)');
       }, 30000); // Log every 30 seconds
       
