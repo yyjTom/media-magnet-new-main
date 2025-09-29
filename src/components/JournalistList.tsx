@@ -36,9 +36,13 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
     [companyName, website],
   );
   const onResultsRef = useRef(onResults);
-  const [outreachMessages, setOutreachMessages] = useState<Record<string, OutreachMessages>>({});
-  const [outreachErrors, setOutreachErrors] = useState<Record<string, string>>({});
-  const [outreachLoading, setOutreachLoading] = useState<Record<string, boolean>>({});
+  // 简化状态管理 - 每个记者一个状态对象
+  const [journalistStates, setJournalistStates] = useState<Record<string, {
+    outreach: OutreachMessages | null;
+    loading: boolean;
+    error: string | null;
+  }>>({});
+  
   const lastResultsStatusRef = useRef<{ website: string; status: 'success' | 'empty' | 'error' } | null>(null);
 
   useEffect(() => {
@@ -79,6 +83,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
 
     callback(data.journalists);
   }, [data?.journalists, isError]);
+  
   const journalistsList = useMemo(() => data?.journalists ?? [], [data?.journalists]);
   const resultsCount = journalistsList.length;
 
@@ -111,95 +116,80 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
     }
   }, [website, resultsCount, isLoading, isError, error]);
 
-  // Optional: validate links to avoid 404 before rendering (backend checks reachability)
-  const [validatedMap, setValidatedMap] = useState<Record<string, boolean>>({});
+  // 生成记者的唯一键
+  const getJournalistKey = (journalist: Journalist, index: number) => 
+    `${journalist.email ?? journalist.coverageLink ?? journalist.name}-${index}`;
 
+  // 自动开始为所有记者生成 outreach
   useEffect(() => {
-    const urls = new Set<string>();
-    journalistsList.forEach((j) => {
-      if (j.coverageLink) urls.add(j.coverageLink);
-      (j.sources || []).forEach((s) => s.url && urls.add(s.url));
-    });
-    if (urls.size === 0) return;
-
-    // call backend validator
-    const base = import.meta.env.PROD
-      ? ''
-      : `${location.protocol}//${location.hostname}:3001`;
-    fetch(`${base}/api/auth/validate-urls`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls: Array.from(urls) }),
-    })
-      .then((r) => r.json())
-      .then((payload) => {
-        const map: Record<string, boolean> = {};
-        (payload?.results || []).forEach((it: { url: string; ok: boolean }) => {
-          map[it.url] = !!it.ok;
-        });
-        setValidatedMap(map);
-      })
-      .catch(() => {});
-  }, [journalistsList]);
-
-  const outreachMutation = useMutation({
-    mutationFn: ({ journalist }: { journalist: Journalist }) =>
-      getEmailBody({ journalist, companyName, companyDescription, website }),
-  });
-
-  // 自动预取所有记者的 outreach，逐个依次调用
-  useEffect(() => {
+    if (journalistsList.length === 0) return;
+    
     let cancelled = false;
+    console.log(`🚀 Starting outreach generation for ${journalistsList.length} journalists`);
 
-    const toKey = (j: Journalist, idx: number) => `${j.email ?? j.coverageLink ?? j.name}-${idx}`;
-
-    const tasks: Array<{ j: Journalist; idx: number; key: string }> = journalistsList
-      .map((j, idx) => ({ j, idx, key: toKey(j, idx) }))
-      .filter(({ key }) => !outreachMessages[key] && !outreachLoading[key] && !outreachErrors[key]);
-
-    if (tasks.length === 0) return;
-
-    console.log(`Starting outreach generation for ${tasks.length} journalists`);
-
-    (async () => {
-      for (let i = 0; i < tasks.length; i++) {
+    const generateOutreach = async () => {
+      for (let i = 0; i < journalistsList.length; i++) {
         if (cancelled) break;
         
-        const { j, idx, key } = tasks[i];
-        console.log(`Processing journalist ${i + 1}/${tasks.length}: ${j.name} (key: ${key})`);
+        const journalist = journalistsList[i];
+        const key = getJournalistKey(journalist, i);
         
-        setOutreachLoading((prev) => ({ ...prev, [key]: true }));
+        // 跳过已经处理过的
+        if (journalistStates[key]) continue;
+        
+        console.log(`📝 Processing ${i + 1}/${journalistsList.length}: ${journalist.name}`);
+        
+        // 设置加载状态
+        setJournalistStates(prev => ({
+          ...prev,
+          [key]: { outreach: null, loading: true, error: null }
+        }));
         
         try {
-          const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
+          const result = await getEmailBody({ 
+            journalist, 
+            companyName, 
+            companyDescription, 
+            website 
+          });
+          
           if (cancelled) return;
           
-          console.log(`✅ Success for ${j.name}:`, outreach);
-          setOutreachLoading((prev) => ({ ...prev, [key]: false }));
-          setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
+          console.log(`✅ Success for ${journalist.name}`);
+          setJournalistStates(prev => ({
+            ...prev,
+            [key]: { outreach: result.outreach, loading: false, error: null }
+          }));
+          
         } catch (e) {
           if (cancelled) return;
           
-          const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
-          console.log(`❌ Error for ${j.name}:`, message);
-          setOutreachLoading((prev) => ({ ...prev, [key]: false }));
-          setOutreachErrors((prev) => ({ ...prev, [key]: message }));
+          const errorMessage = e instanceof Error ? e.message : 'Generation failed';
+          console.log(`❌ Error for ${journalist.name}:`, errorMessage);
+          setJournalistStates(prev => ({
+            ...prev,
+            [key]: { outreach: null, loading: false, error: errorMessage }
+          }));
         }
         
-        // 每个请求之间稍微延迟，避免过载
-        if (!cancelled && i < tasks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        // 每个请求间隔 500ms
+        if (!cancelled && i < journalistsList.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       
-      console.log('All outreach generation completed');
-    })();
+      if (!cancelled) {
+        console.log('🎉 All outreach generation completed');
+      }
+    };
+
+    generateOutreach();
 
     return () => {
       cancelled = true;
-      console.log('Outreach generation cancelled');
+      console.log('🛑 Outreach generation cancelled');
     };
-  }, [journalistsList, companyName, companyDescription, website, outreachMessages, outreachLoading, outreachErrors]);
+  }, [journalistsList, companyName, companyDescription, website]);
 
   const toggleExpanded = (journalistKey: string, journalist: Journalist) => {
     const willExpand = !expandedJournalists.has(journalistKey);
@@ -278,11 +268,10 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
             const twitterUrl = toProfileUrl(journalist.twitter, 'https://twitter.com/');
             const linkedInUrl = toProfileUrl(journalist.linkedIn, 'https://www.linkedin.com/in/');
             const instagramUrl = toProfileUrl(journalist.instagram, 'https://www.instagram.com/');
-            const journalistKey = `${journalist.email ?? journalist.coverageLink ?? journalist.name}-${index}`;
+            const journalistKey = getJournalistKey(journalist, index);
             const isExpanded = expandedJournalists.has(journalistKey);
-            const outreach = outreachMessages[journalistKey];
-            const isGeneratingOutreach = Boolean(outreachLoading[journalistKey]);
-            const outreachError = outreachErrors[journalistKey];
+            const state = journalistStates[journalistKey] || { outreach: null, loading: false, error: null };
+            const { outreach, loading: isGeneratingOutreach, error: outreachError } = state;
             const journalistName = journalist.name;
             const organization = journalist.parentMediaOrganization;
 
@@ -457,10 +446,8 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                           <div>Has outreach: {!!outreach ? 'YES' : 'NO'}</div>
                           <div>Is loading: {isGeneratingOutreach ? 'YES' : 'NO'}</div>
                           <div>Has error: {!!outreachError ? 'YES' : 'NO'}</div>
-                          <div>Loading state: {JSON.stringify(outreachLoading)}</div>
-                          <div>Messages state: {JSON.stringify(Object.keys(outreachMessages))}</div>
-                          <div>Errors state: {JSON.stringify(Object.keys(outreachErrors))}</div>
-                          {outreach && <div>Email length: {outreach.email?.length || 0}</div>}
+                          <div>State: {JSON.stringify(state)}</div>
+                          {outreach && <div>Email preview: {outreach.email?.substring(0, 50)}...</div>}
                         </div>
                       )}
 
@@ -542,3 +529,4 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
     </section>
   );
 };
+
