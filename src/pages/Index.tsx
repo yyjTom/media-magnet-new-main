@@ -159,7 +159,7 @@ const Index = () => {
         <h1 className="sr-only">Get Press Coverage in Top Outlets Without PR Agencies</h1>
       </header>
 
-      <HeroSection onSubmit={handleWebsiteSubmit} />
+      <HeroSection onSubmit={handleWebsiteSubmit} isGenerating={isGenerating} />
 
       {submittedWebsite && (
         <div id="journalist-results">

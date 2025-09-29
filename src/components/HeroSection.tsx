@@ -12,9 +12,11 @@ import { UserMenu } from '@/components/auth/UserMenu';
 import { useToast } from '@/hooks/use-toast';
 interface HeroSectionProps {
   onSubmit: (website: string) => void;
+  isGenerating?: boolean; // 来自父组件的生成中状态，用于同步按钮
 }
 export const HeroSection = ({
-  onSubmit
+  onSubmit,
+  isGenerating = false,
 }: HeroSectionProps) => {
   const [website, setWebsite] = useState('');
   const [rawInput, setRawInput] = useState('');
@@ -24,6 +26,11 @@ export const HeroSection = ({
   const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
+
+  // 父组件结果返回后，立刻同步按钮状态
+  useEffect(() => {
+    setSubmitting(isGenerating);
+  }, [isGenerating]);
 
   // Update authentication state when user logs in/out
   useEffect(() => {
