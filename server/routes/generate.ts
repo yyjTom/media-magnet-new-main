@@ -49,25 +49,64 @@ const getFirstGoogleSearchResult = async (query: string): Promise<string | null>
   try {
     console.log(`🔍 Searching Google for: "${query}"`);
     
+    // 获取代理配置
+    const proxyUrl = (process.env.GEMINI_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
+    let normalizedProxy = '';
+    
+    if (proxyUrl) {
+      // 规范化代理URL
+      if (/^\d+$/.test(proxyUrl)) {
+        normalizedProxy = `http://127.0.0.1:${proxyUrl}`;
+      } else if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(proxyUrl) || /^[\w.-]+:\d+$/.test(proxyUrl)) {
+        normalizedProxy = `http://${proxyUrl}`;
+      } else if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
+        normalizedProxy = proxyUrl;
+      }
+      
+      if (normalizedProxy) {
+        console.log(`🔧 Using proxy for Google search: ${normalizedProxy}`);
+      }
+    }
+    
+    // 配置Puppeteer启动参数
+    const launchArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor'
+    ];
+    
+    // 如果有代理，添加代理参数
+    if (normalizedProxy) {
+      launchArgs.push(`--proxy-server=${normalizedProxy}`);
+    }
+    
     // 使用Puppeteer来获取Google搜索结果
     const browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ]
+      args: launchArgs
     });
     
     const page = await browser.newPage();
     
     // 设置用户代理，避免被Google阻止
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    
+    // 如果代理需要认证，设置认证信息
+    if (normalizedProxy && (normalizedProxy.includes('@') || process.env.PROXY_USERNAME)) {
+      const username = process.env.PROXY_USERNAME || '';
+      const password = process.env.PROXY_PASSWORD || '';
+      if (username && password) {
+        await page.authenticate({ username, password });
+        console.log(`🔐 Using proxy authentication for user: ${username}`);
+      }
+    }
     
     // 构建Google搜索URL
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=1`;
