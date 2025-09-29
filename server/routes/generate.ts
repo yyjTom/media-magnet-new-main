@@ -5,38 +5,34 @@ const router = express.Router();
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-const TARGET_JOURNALIST_COUNT = 20;
+const TARGET_JOURNALIST_COUNT = 10;
 
 // ---------- Shared prompt builders ----------
 const buildPrompt = ({
   companyName,
   companyDescription,
   website,
-}: { companyName: string; companyDescription: string; website: string }) => `You are an expert at finding PR leads for tech startups. You are provided with [Customer company name], [company description], and [URL] which needs media outreach. If you have the URL, go to the front page and analyze what they do. They need to be covered by premier journalists in prominent media such as WSJ, Forbes, New York Times, TechCrunch, BusinessInsider, Washington Post, Bloomberg, The Verge etc. Do not limit yourself with the outlets above, and suggest the most fitting outlet based on their website or content. Find and search ${TARGET_JOURNALIST_COUNT} different journalists who have covered a product like the one specified in the URL. If the URL is not descriptive enough, use the company description text instead. Search for the journalist's email, their LinkedIn address, their X handle, and their instagram.
+}: { companyName: string; companyDescription: string; website: string }) => {
+  const subject = website && website.trim().length > 0
+    ? `${website} (If this is URL, visit its website to gain understanding)`
+    : `${companyName || 'The company'} — ${companyDescription}`;
 
-While doing the search, indicate your sources, and the relevance score.
+  return `${subject} need to be covered by premier journalists in different media. Find and search ${TARGET_JOURNALIST_COUNT} different journalists who have covered a product like this, and record the media outlet name, and link to the article. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle.
 
-Return the data as JSON with a top-level "journalists" array of exactly ${TARGET_JOURNALIST_COUNT} entries. Each entry MUST match the following schema and use null when data is unavailable:
+Return the data as strict JSON with a top-level "journalists" array of exactly ${TARGET_JOURNALIST_COUNT} entries. Each entry MUST use these exact keys (snake_case where shown) and null when unavailable, and include absolute URLs:
 {
   "name": string,
-  "parentMediaOrganization": string,
-  "coverageSummary": string,
-  "coverageLink": string (absolute URL),
+  "outlet": string,
+  "article_link": string,
+  "beat": string | null,
+  "relevance_score": number,
   "email": string | null,
-  "linkedIn": string | null,
-  "twitter": string | null,
-  "instagram": string | null,
-  "relevanceScore": number (0-100),
-  "sources": [
-    { "description": string, "url": string (absolute URL) }
-  ]
+  "linkedin": string | null,
+  "x_handle": string | null
 }
 
-Customer company name: ${companyName}
-Company description: ${companyDescription}
-URL: ${website}
-
-Ensure that: (1) at least one source with a working link is provided per journalist, (2) relevanceScore is a whole number between 0 and 100, and (3) coverageSummary references the linked article. Do not include any extra commentary outside of the JSON.`;
+Only return the JSON. No extra commentary.`;
+};
 
 const buildOutreachPrompt = ({
   journalist,
@@ -224,7 +220,34 @@ router.post('/journalists', async (req, res) => {
       return res.status(500).json({ error: 'Failed to parse Gemini JSON response' });
     }
 
-    const journalists = Array.isArray(parsed?.journalists) ? parsed.journalists : [];
+    // Map the simplified schema to the app's expected schema for compatibility
+    const mapItem = (item: any) => {
+      const name = item?.name ?? '';
+      const outlet = item?.outlet ?? item?.media ?? item?.parentMediaOrganization ?? '';
+      const articleLink = item?.article_link ?? item?.['article link'] ?? item?.coverageLink ?? '';
+      const beat = item?.beat ?? '';
+      const relevanceRaw = item?.relevance_score ?? item?.['relevance score'] ?? item?.relevanceScore ?? 0;
+      const relevanceScore = Number.isFinite(Number(relevanceRaw)) ? Math.max(1, Math.min(100, Math.round(Number(relevanceRaw)))) : 0;
+      const email = item?.email ?? null;
+      const linkedIn = item?.linkedin ?? item?.linkedIn ?? null;
+      const twitter = item?.x_handle ?? item?.twitter ?? null;
+      const coverageLink = typeof articleLink === 'string' ? articleLink : '';
+
+      return {
+        name,
+        parentMediaOrganization: outlet,
+        coverageSummary: beat ? `Beat: ${beat}` : '',
+        coverageLink,
+        email,
+        linkedIn,
+        twitter,
+        instagram: null,
+        relevanceScore,
+        sources: coverageLink ? [{ description: 'article', url: coverageLink }] : []
+      };
+    };
+
+    const journalists = Array.isArray(parsed?.journalists) ? parsed.journalists.map(mapItem) : [];
     const totalTime = Date.now() - requestStartTime;
     console.log(`✅ Generated ${journalists.length} journalists in ${totalTime}ms`);
     return res.json({ journalists });
