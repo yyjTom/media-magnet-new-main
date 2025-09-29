@@ -2,7 +2,6 @@ import express from 'express';
 import axios from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import * as cheerio from 'cheerio';
-import puppeteer from 'puppeteer';
 
 const router = express.Router();
 
@@ -44,166 +43,83 @@ Return the data as strict JSON with a top-level "journalists" array of exactly $
 Only return valid JSON. No extra commentary.`;
 };
 
-// ---------- Google搜索爬虫功能 ----------
+// ---------- Google搜索爬虫功能 (使用HTTP请求替代Puppeteer) ----------
 const getFirstGoogleSearchResult = async (query: string): Promise<string | null> => {
-  let browser: any = null;
   try {
     console.log(`🔍 Searching Google for: "${query}"`);
     
-    // 获取代理配置
-    const proxyUrl = (process.env.GEMINI_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
-    let normalizedProxy = '';
-    
-    if (proxyUrl) {
-      // 规范化代理URL
-      if (/^\d+$/.test(proxyUrl)) {
-        normalizedProxy = `http://127.0.0.1:${proxyUrl}`;
-      } else if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(proxyUrl) || /^[\w.-]+:\d+$/.test(proxyUrl)) {
-        normalizedProxy = `http://${proxyUrl}`;
-      } else if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
-        normalizedProxy = proxyUrl;
-      }
-      
-      if (normalizedProxy) {
-        console.log(`🔧 Using proxy for Google search: ${normalizedProxy}`);
-      }
-    }
-    
-    // 配置Puppeteer启动参数（优化稳定性）
-    const launchArgs = [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu',
-      '--disable-web-security',
-      '--disable-features=VizDisplayCompositor',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-ipc-flooding-protection',
-      '--memory-pressure-off',
-      '--max_old_space_size=4096'
-    ];
-    
-    // 如果有代理，添加代理参数
-    if (normalizedProxy) {
-      launchArgs.push(`--proxy-server=${normalizedProxy}`);
-    }
-    
-    // 使用Puppeteer来获取Google搜索结果（增强配置）
-    browser = await puppeteer.launch({
-      headless: true, // 使用headless模式
-      args: launchArgs,
-      timeout: 30000, // 30秒启动超时
-      protocolTimeout: 30000,
-      defaultViewport: { width: 1280, height: 720 }
-    });
-    
-    const page = await browser.newPage();
-    
-    // 设置用户代理，避免被Google阻止
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    
-    // 如果代理需要认证，设置认证信息
-    if (normalizedProxy && (normalizedProxy.includes('@') || process.env.PROXY_USERNAME)) {
-      const username = process.env.PROXY_USERNAME || '';
-      const password = process.env.PROXY_PASSWORD || '';
-      if (username && password) {
-        await page.authenticate({ username, password });
-        console.log(`🔐 Using proxy authentication for user: ${username}`);
-      }
-    }
+    // 获取代理配置 (重用现有的代理逻辑)
+    const httpsAgent = getHttpsAgentFromEnv();
     
     // 构建Google搜索URL
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=1`;
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=3`;
     
-    // 设置页面超时和错误处理
-    page.setDefaultTimeout(20000);
-    page.setDefaultNavigationTimeout(20000);
+    // 设置请求头，模拟真实浏览器
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+    };
     
-    // 访问Google搜索页面（改进错误处理）
-    try {
-      await page.goto(searchUrl, { 
-        waitUntil: 'domcontentloaded', // 改为更快的加载策略
-        timeout: 20000 
-      });
-    } catch (navigationError) {
-      console.error(`Navigation failed for "${query}":`, navigationError.message);
-      await browser.close();
+    // 发起HTTP请求获取搜索结果页面
+    const response = await axios.get(searchUrl, {
+      headers,
+      timeout: 15000,
+      httpsAgent,
+      validateStatus: (status) => status < 500
+    });
+    
+    if (response.status !== 200) {
+      console.log(`❌ Google search returned status ${response.status} for: "${query}"`);
       return null;
     }
     
-    // 等待搜索结果加载（更宽松的选择器）
-    try {
-      await page.waitForSelector('body', { timeout: 5000 }); // 先等待页面基本加载
-      await page.waitForSelector('div[data-ved], .g, #search', { timeout: 15000 }); // 等待搜索结果
-    } catch (selectorError) {
-      console.error(`Search results not found for "${query}":`, selectorError.message);
-      await browser.close();
-      return null;
-    }
+    // 使用cheerio解析HTML
+    const $ = cheerio.load(response.data);
     
-    // 提取第一个搜索结果的链接（改进选择器）
-    let firstResultLink = null;
-    try {
-      firstResultLink = await page.evaluate(() => {
-        // 查找第一个真实的搜索结果链接（不是广告，更全面的选择器）
-        const resultSelectors = [
-          'h3 a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
-          'div[data-ved] a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
-          '.g a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
-          '[data-ved] a[href^="http"]:not([href*="googleadservices"]):not([href*="google.com/search"])',
-          'a[href^="http"][data-ved]:not([href*="googleadservices"]):not([href*="google.com/search"])'
-        ];
+    // 查找第一个真实的搜索结果链接
+    const selectors = [
+      'h3 a[href^="/url?q="]',
+      '.g a[href^="/url?q="]',
+      'div[data-ved] a[href^="/url?q="]'
+    ];
+    
+    for (const selector of selectors) {
+      const elements = $(selector);
+      for (let i = 0; i < elements.length; i++) {
+        const element = elements.eq(i);
+        const href = element.attr('href');
         
-        for (const selector of resultSelectors) {
-          const elements = document.querySelectorAll(selector);
-          for (const element of elements) {
-            const href = (element as HTMLAnchorElement).href;
-            if (href && 
-                !href.includes('google.com') && 
-                !href.includes('googleadservices') && 
-                !href.includes('youtube.com/redirect') &&
-                !href.includes('webcache.googleusercontent.com')) {
-              return href;
+        if (href && href.startsWith('/url?q=')) {
+          // 从Google的重定向URL中提取真实URL
+          const urlMatch = href.match(/\/url\?q=([^&]+)/);
+          if (urlMatch) {
+            const decodedUrl = decodeURIComponent(urlMatch[1]);
+            
+            // 过滤掉无效的链接
+            if (decodedUrl && 
+                decodedUrl.startsWith('http') &&
+                !decodedUrl.includes('google.com') &&
+                !decodedUrl.includes('googleadservices') &&
+                !decodedUrl.includes('youtube.com/redirect') &&
+                !decodedUrl.includes('webcache.googleusercontent.com')) {
+              
+              console.log(`✅ Found first Google result: ${decodedUrl}`);
+              return decodedUrl;
             }
           }
         }
-        return null;
-      });
-    } catch (evaluateError) {
-      console.error(`Failed to extract link for "${query}":`, evaluateError.message);
-    }
-    
-    // 确保浏览器始终被关闭
-    try {
-      await browser.close();
-    } catch (closeError) {
-      console.error(`Failed to close browser for "${query}":`, closeError.message);
-    }
-    
-    if (firstResultLink) {
-      console.log(`✅ Found first Google result: ${firstResultLink}`);
-      return firstResultLink;
-    } else {
-      console.log(`❌ No valid search result found for: "${query}"`);
-      return null;
-    }
-    
-  } catch (error) {
-    console.error(`❌ Google search failed for "${query}":`, error);
-    // 确保在错误情况下也关闭浏览器
-    try {
-      if (browser) {
-        await browser.close();
       }
-    } catch (closeError) {
-      console.error(`Failed to close browser in error handler:`, closeError.message);
     }
+    
+    console.log(`❌ No valid search result found for: "${query}"`);
+    return null;
+    
+  } catch (error: any) {
+    console.error(`❌ Google search failed for "${query}":`, error.message);
     return null;
   }
 };
