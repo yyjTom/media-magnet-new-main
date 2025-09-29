@@ -147,32 +147,58 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       getEmailBody({ journalist, companyName, companyDescription, website }),
   });
 
-  // Prefetch outreach sequentially for each result by default
+  // Prefetch outreach with limited concurrency; prioritize first N items
   useEffect(() => {
     let cancelled = false;
+    const PREFETCH_FIRST = 6;
+    const CONCURRENCY = 4;
+
+    const toKey = (j: Journalist, idx: number) => `${j.email ?? j.coverageLink ?? j.name}-${idx}`;
+
+    const tasks: Array<{ j: Journalist; idx: number; key: string }> = journalistsList
+      .map((j, idx) => ({ j, idx, key: toKey(j, idx) }))
+      .filter(({ key }) => !outreachMessages[key] && !outreachLoading[key]);
+
+    if (tasks.length === 0) return;
+
+    // Reorder: first N at front, rest follow
+    const head = tasks.slice(0, PREFETCH_FIRST);
+    const tail = tasks.slice(PREFETCH_FIRST);
+    const ordered = [...head, ...tail];
+
+    const runBatch = async (batch: typeof tasks) => {
+      await Promise.all(
+        batch.map(async ({ j, idx, key }) => {
+          if (cancelled) return;
+          setOutreachLoading((prev) => ({ ...prev, [key]: true }));
+          try {
+            const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
+            if (cancelled) return;
+            setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
+          } catch (e) {
+            if (cancelled) return;
+            const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
+            setOutreachErrors((prev) => ({ ...prev, [key]: message }));
+          } finally {
+            if (cancelled) return;
+            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
+          }
+        })
+      );
+    };
+
     (async () => {
-      for (let i = 0; i < journalistsList.length; i++) {
+      for (let i = 0; i < ordered.length; i += CONCURRENCY) {
         if (cancelled) break;
-        const j = journalistsList[i];
-        const key = `${j.email ?? j.coverageLink ?? j.name}-${i}`;
-        if (outreachMessages[key] || outreachLoading[key]) continue;
-        setOutreachLoading((prev) => ({ ...prev, [key]: true }));
-        try {
-          const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
-          if (cancelled) break;
-          setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
-        } catch (e) {
-          if (cancelled) break;
-          const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
-          setOutreachErrors((prev) => ({ ...prev, [key]: message }));
-        } finally {
-          if (cancelled) break;
-          setOutreachLoading((prev) => ({ ...prev, [key]: false }));
-        }
+        const batch = ordered.slice(i, i + CONCURRENCY);
+        await runBatch(batch);
       }
     })();
-    return () => { cancelled = true; };
-  }, [journalistsList, companyName, companyDescription, website]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [journalistsList, companyName, companyDescription, website, outreachMessages, outreachLoading]);
 
   const toggleExpanded = (journalistKey: string, journalist: Journalist) => {
     const willExpand = !expandedJournalists.has(journalistKey);
