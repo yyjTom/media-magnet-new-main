@@ -355,7 +355,7 @@ router.get('/test-openai', async (req, res) => {
       console.error('OpenAI connectivity test failed:', error);
       
       // More detailed error information
-      let errorDetails = {
+      let errorDetails: any = {
         error: error.message || 'Unknown error',
         type: error.constructor.name,
         code: error.code,
