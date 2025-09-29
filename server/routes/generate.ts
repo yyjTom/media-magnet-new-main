@@ -92,9 +92,9 @@ Ensure each value is a single concise message for the specified channel, ready t
 
 // Helper function for OpenAI requests with timeout and retry
 async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.PRESS_OPENAI_API_KEY;
   if (!apiKey) {
-    console.error('❌ OPENAI_API_KEY not found in environment variables');
+    console.error('❌ PRESS_OPENAI_API_KEY not found in environment variables');
     console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('OPENAI')));
     throw new Error('OpenAI API key not configured');
   }
