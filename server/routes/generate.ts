@@ -21,12 +21,18 @@ const buildPrompt = ({
   return `${subject} need to be covered by premier journalists in different media. Find and search 10 different journalists who have covered a product like this, and record the media outlet name and a real article link. Give each one a relevance score between 1 - 100. Search for their email, LinkedIn address, and X handle. The returned result email must exist.
 
 CRITICAL REQUIREMENTS FOR ARTICLE LINKS:
-- Provide REAL, working article links where these journalists have published relevant content
-- Use actual URLs from major news websites (nytimes.com, wsj.com, theverge.com, techcrunch.com, etc.)
-- If you cannot find a real article link, set article_link to null
-- DO NOT create fake or placeholder URLs
-- Focus on recent articles (within last 2 years) when possible
-- Ensure the article link actually relates to the journalist's work in the relevant field
+- For each journalist, perform a Google search using the exact query: "[journalist name] journalist"
+- Use the first search result URL as the article_link
+- The article_link should be the actual URL from the first Google search result
+- If no search results are found, set article_link to null
+- DO NOT generate fake or placeholder URLs
+- Only use real URLs that would appear as the first result when searching "[name] journalist" on Google
+
+SEARCH PROCESS FOR EACH JOURNALIST:
+1. Take the journalist's name (e.g., "David Pogue")
+2. Search Google with the query: "David Pogue journalist"
+3. Use the first search result's URL as the article_link
+4. If no results found, set article_link to null
 
 CONTACT INFORMATION REQUIREMENTS:
 - Provide real, verified email addresses when possible
