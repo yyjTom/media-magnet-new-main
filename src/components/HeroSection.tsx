@@ -124,7 +124,7 @@ export const HeroSection = ({
             <div className="relative w-full">
               <Input 
                 type="text" 
-                placeholder="Enter a website or company description..." 
+                placeholder="URL or description" 
                 value={rawInput} 
                 onChange={e => setRawInput(e.target.value)} 
                 className="w-full h-14 text-lg input-glow smooth-transition border-2 focus:border-primary pr-32 !bg-white !text-black placeholder:!text-gray-500" 

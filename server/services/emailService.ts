@@ -17,7 +17,7 @@ export function generateVerificationCode(): string {
 
 // Send verification email
 export async function sendVerificationEmail(email: string, code: string): Promise<void> {
-  const fromName = process.env.EMAIL_FROM_NAME || 'Media Magnet';
+  const fromName = process.env.EMAIL_FROM_NAME || 'Press Club';
   // Resend requires a verified domain sender
   const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
   
@@ -26,19 +26,19 @@ export async function sendVerificationEmail(email: string, code: string): Promis
     const result = await client.emails.send({
       from: `"${fromName}" <${fromEmail}>`,
       to: email,
-      subject: 'Media Magnet - Email Verification Code',
+      subject: 'Press Club - Email Verification Code',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #0066FF;">Media Magnet Email Verification</h2>
+          <h2 style="color: #0066FF;">Press Club Email Verification</h2>
           <p>Hello,</p>
-          <p>Thanks for signing up for Media Magnet. Please use the code below to verify your email:</p>
+          <p>Thanks for signing up for Press Club. Please use the code below to verify your email:</p>
           <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0;">
             <span style="font-size: 32px; font-weight: bold; color: #0066FF; letter-spacing: 5px;">${code}</span>
           </div>
           <p>This code will expire in 10 minutes.</p>
           <p>If you did not request this, you can safely ignore this email.</p>
           <hr style="margin: 30px 0;">
-          <p style="color: #666; font-size: 12px;">This is an automated message from Media Magnet. Please do not reply.</p>
+          <p style="color: #666; font-size: 12px;">This is an automated message from Press Club. Please do not reply.</p>
         </div>
       `,
     });

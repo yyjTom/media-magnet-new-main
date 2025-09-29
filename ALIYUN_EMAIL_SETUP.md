@@ -27,7 +27,7 @@ EMAIL_PORT=465
 EMAIL_SECURE=true
 EMAIL_USER=noreply@yourdomain.com
 EMAIL_PASS=your-smtp-password  # 注意是SMTP密码/授权码，不是登录密码
-EMAIL_FROM_NAME=Media Magnet
+EMAIL_FROM_NAME=Press Club
 
 # 前端地址（用于CORS）
 FRONTEND_URL=http://localhost:5173

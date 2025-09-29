@@ -1,4 +1,4 @@
-## Media Magnet
+## Press Club
 
 一个用于为创业公司自动推荐媒体记者并生成外联文案的全栈应用。支持注册登录（邮箱验证码）、生成记者列表、生成个性化外联消息、历史记录与分页查看。
 
@@ -37,7 +37,7 @@ npm run dev:full
 - EMAIL_SECURE=true
 - EMAIL_USER=noreply@yourdomain.com
 - EMAIL_PASS=your-smtp-password
-- EMAIL_FROM_NAME=Media Magnet
+- EMAIL_FROM_NAME=Press Club
 - FRONTEND_URL=http://localhost:5173
 
 前端相关
