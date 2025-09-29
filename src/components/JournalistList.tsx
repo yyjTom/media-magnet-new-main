@@ -449,6 +449,9 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                           <div>Has outreach: {!!outreach ? 'YES' : 'NO'}</div>
                           <div>Is loading: {isGeneratingOutreach ? 'YES' : 'NO'}</div>
                           <div>Has error: {!!outreachError ? 'YES' : 'NO'}</div>
+                          <div>Loading state: {JSON.stringify(outreachLoading)}</div>
+                          <div>Messages state: {JSON.stringify(Object.keys(outreachMessages))}</div>
+                          <div>Errors state: {JSON.stringify(Object.keys(outreachErrors))}</div>
                           {outreach && <div>Email length: {outreach.email?.length || 0}</div>}
                         </div>
                       )}
