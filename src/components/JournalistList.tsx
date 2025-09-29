@@ -399,15 +399,17 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                     </div>
 
                     <Button
-                      variant={outreachError ? "secondary" : "outline"}
+                      variant="outline"
                       size="sm"
                       onClick={() => toggleExpanded(journalistKey, journalist)}
                       className={`whitespace-nowrap ${
                         outreachError 
-                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed opacity-60' 
+                          ? 'bg-gray-200 text-gray-500 border-gray-300 hover:bg-gray-200' 
                           : isGeneratingOutreach 
                             ? 'opacity-75' 
-                            : ''
+                            : outreach
+                              ? 'border-green-300 bg-green-50 hover:bg-green-100'
+                              : ''
                       }`}
                       disabled={!!outreachError}
                     >
@@ -415,17 +417,21 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                         <>
                           Hide Message <ChevronUp className="ml-2 h-4 w-4" />
                         </>
-                      ) : isGeneratingOutreach ? (
-                        <>
-                          Generating... <ChevronDown className="ml-2 h-4 w-4 animate-spin" />
-                        </>
                       ) : outreachError ? (
                         <>
                           Failed <ChevronDown className="ml-2 h-4 w-4" />
                         </>
-                      ) : (
+                      ) : isGeneratingOutreach ? (
+                        <>
+                          Generating... <ChevronDown className="ml-2 h-4 w-4 animate-spin" />
+                        </>
+                      ) : outreach ? (
                         <>
                           View Message <ChevronDown className="ml-2 h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          Loading... <ChevronDown className="ml-2 h-4 w-4" />
                         </>
                       )}
                     </Button>
