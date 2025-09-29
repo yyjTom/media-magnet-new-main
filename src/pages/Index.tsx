@@ -29,6 +29,8 @@ const Index = () => {
   }, []);
 
   const handleWebsiteSubmit = (website: string) => {
+    // 先清空之前的记者列表
+    setStructuredJournalists([]);
     setSubmittedWebsite(website);
     setIsGenerating(true);
     toast({
