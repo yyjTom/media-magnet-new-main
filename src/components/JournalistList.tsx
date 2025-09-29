@@ -349,6 +349,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                           <a
                             href={`mailto:${journalist.email}`}
                             className="inline-flex items-center gap-2 text-primary hover:text-primary-glow smooth-transition"
+                            aria-label={`Email ${journalist.name}`}
                             onClick={() =>
                               analytics.outreachSendEmailClicked({
                                 journalistName,
@@ -358,7 +359,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                             }
                           >
                             <Mail className="h-4 w-4" />
-                            {journalist.email}
+                            Email
                           </a>
                         )}
                         {twitterUrl && (
