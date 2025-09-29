@@ -82,8 +82,11 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       return;
     }
 
-    // 延迟调用确保记者列表已经渲染到DOM中
-    setTimeout(() => callback(data.journalists), 200);
+    // 只有当记者列表有10条数据时才重置按钮状态
+    if (data.journalists.length === 10) {
+      // 延迟调用确保记者列表已经渲染到DOM中
+      setTimeout(() => callback(data.journalists), 200);
+    }
   }, [data?.journalists, isError]);
   
   const journalistsList = useMemo(() => data?.journalists ?? [], [data?.journalists]);
