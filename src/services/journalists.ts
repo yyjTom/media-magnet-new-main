@@ -21,7 +21,7 @@ export interface Journalist {
 }
 
 export interface FindJournalistsRequest {
-  website: string;
+  website?: string;
   companyName?: string;
   companyDescription?: string;
 }
@@ -83,18 +83,17 @@ export async function findJournalists({
   companyName,
   companyDescription,
 }: FindJournalistsRequest): Promise<FindJournalistsResponse> {
-  if (!website) {
-    throw new Error('A website is required to find journalists.');
-  }
 
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OpenAI API key is not configured. Set VITE_OPENAI_API_KEY in your environment.');
   }
 
-  const resolvedCompanyName = companyName?.trim() || inferCompanyNameFromUrl(website);
+  const hasWebsite = Boolean(website && website.trim().length > 0);
+  const safeWebsite = website?.trim() || '';
+  const resolvedCompanyName = companyName?.trim() || (hasWebsite ? inferCompanyNameFromUrl(safeWebsite) : 'Your Company');
   const resolvedCompanyDescription =
-    companyDescription?.trim() || inferCompanyDescriptionFromUrl(website, resolvedCompanyName);
+    companyDescription?.trim() || (hasWebsite ? inferCompanyDescriptionFromUrl(safeWebsite, resolvedCompanyName) : (defaultCompanyDescription));
 
   console.info('[findJournalists] Request initiated', {
     website,
@@ -121,7 +120,7 @@ export async function findJournalists({
         {
           role: 'user',
           content: buildPrompt({
-            website,
+            website: safeWebsite,
             companyName: resolvedCompanyName,
             companyDescription: resolvedCompanyDescription,
           }),
@@ -184,7 +183,8 @@ export async function findJournalists({
     // dynamic import to avoid circular refs
     const { authService } = await import('@/services/authService');
     if (authService.isAuthenticated()) {
-      authService.saveGenerationHistory({ url: website, payload: { journalists: normalized } }).catch(() => {});
+      const historyUrl = safeWebsite || (companyDescription?.slice(0, 200) ?? '');
+      authService.saveGenerationHistory({ url: historyUrl, payload: { journalists: normalized } }).catch(() => {});
     }
   } catch {}
 

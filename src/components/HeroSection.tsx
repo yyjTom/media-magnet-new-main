@@ -17,6 +17,7 @@ export const HeroSection = ({
   onSubmit
 }: HeroSectionProps) => {
   const [website, setWebsite] = useState('');
+  const [rawInput, setRawInput] = useState('');
   const [currentUser, setCurrentUser] = useState<UserType | null>(authService.getCurrentUser());
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -43,16 +44,20 @@ export const HeroSection = ({
       return;
     }
 
-    const trimmedWebsite = website.trim();
-    if (trimmedWebsite) {
-      analytics.websiteSubmitted({ source: 'hero_form', website: trimmedWebsite });
+    const input = rawInput.trim();
+    if (input) {
+      // Heuristic: treat as URL if it contains a dot and no spaces; prepend https if missing
+      const looksLikeUrl = /\s/.test(input) === false && /\./.test(input);
+      const normalized = looksLikeUrl ? (input.startsWith('http') ? input : `https://${input}`) : '';
+      const valueForHistory = normalized || input;
+      analytics.websiteSubmitted({ source: 'hero_form', website: valueForHistory });
       // Persist to user history if logged in
       if (submitting) return; // 防止连点
       setSubmitting(true);
-      authService.saveWebsiteHistory(trimmedWebsite).catch(() => {}).finally(() => {
+      authService.saveWebsiteHistory(valueForHistory).catch(() => {}).finally(() => {
         // 即便保存失败也允许发起查询，但按钮在 onResults 后解除禁用
       });
-      onSubmit(trimmedWebsite);
+      onSubmit(valueForHistory);
     }
   };
 
@@ -118,10 +123,10 @@ export const HeroSection = ({
           <form onSubmit={handleSubmit} className="flex flex-col items-center space-y-6 w-full max-w-md">
             <div className="relative w-full">
               <Input 
-                type="url" 
-                placeholder="Enter your startup website..." 
-                value={website} 
-                onChange={e => setWebsite(e.target.value)} 
+                type="text" 
+                placeholder="Enter a website or company description..." 
+                value={rawInput} 
+                onChange={e => setRawInput(e.target.value)} 
                 className="w-full h-14 text-lg input-glow smooth-transition border-2 focus:border-primary pr-32 !bg-white !text-black placeholder:!text-gray-500" 
                 required 
               />

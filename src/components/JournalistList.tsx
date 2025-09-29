@@ -147,6 +147,33 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       getEmailBody({ journalist, companyName, companyDescription, website }),
   });
 
+  // Prefetch outreach sequentially for each result by default
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < journalistsList.length; i++) {
+        if (cancelled) break;
+        const j = journalistsList[i];
+        const key = `${j.email ?? j.coverageLink ?? j.name}-${i}`;
+        if (outreachMessages[key] || outreachLoading[key]) continue;
+        setOutreachLoading((prev) => ({ ...prev, [key]: true }));
+        try {
+          const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
+          if (cancelled) break;
+          setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
+        } catch (e) {
+          if (cancelled) break;
+          const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
+          setOutreachErrors((prev) => ({ ...prev, [key]: message }));
+        } finally {
+          if (cancelled) break;
+          setOutreachLoading((prev) => ({ ...prev, [key]: false }));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [journalistsList, companyName, companyDescription, website]);
+
   const toggleExpanded = (journalistKey: string, journalist: Journalist) => {
     const willExpand = !expandedJournalists.has(journalistKey);
     const newExpanded = new Set(expandedJournalists);
