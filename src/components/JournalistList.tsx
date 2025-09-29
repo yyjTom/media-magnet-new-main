@@ -147,7 +147,51 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       getEmailBody({ journalist, companyName, companyDescription, website }),
   });
 
-  // 移除自动预取逻辑，改为按需生成
+  // 自动预取所有记者的 outreach，根据状态控制按钮显示
+  useEffect(() => {
+    let cancelled = false;
+    const CONCURRENCY = 3; // 降低并发数避免过载
+
+    const toKey = (j: Journalist, idx: number) => `${j.email ?? j.coverageLink ?? j.name}-${idx}`;
+
+    const tasks: Array<{ j: Journalist; idx: number; key: string }> = journalistsList
+      .map((j, idx) => ({ j, idx, key: toKey(j, idx) }))
+      .filter(({ key }) => !outreachMessages[key] && !outreachLoading[key] && !outreachErrors[key]);
+
+    if (tasks.length === 0) return;
+
+    const runBatch = async (batch: typeof tasks) => {
+      await Promise.all(
+        batch.map(async ({ j, idx, key }) => {
+          if (cancelled) return;
+          setOutreachLoading((prev) => ({ ...prev, [key]: true }));
+          try {
+            const { outreach } = await getEmailBody({ journalist: j, companyName, companyDescription, website });
+            if (cancelled) return;
+            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
+            setOutreachMessages((prev) => ({ ...prev, [key]: outreach }));
+          } catch (e) {
+            if (cancelled) return;
+            setOutreachLoading((prev) => ({ ...prev, [key]: false }));
+            const message = e instanceof Error ? e.message : 'Unable to generate outreach messages.';
+            setOutreachErrors((prev) => ({ ...prev, [key]: message }));
+          }
+        })
+      );
+    };
+
+    (async () => {
+      for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+        if (cancelled) break;
+        const batch = tasks.slice(i, i + CONCURRENCY);
+        await runBatch(batch);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [journalistsList, companyName, companyDescription, website, outreachMessages, outreachLoading, outreachErrors]);
 
   const toggleExpanded = (journalistKey: string, journalist: Journalist) => {
     const willExpand = !expandedJournalists.has(journalistKey);
@@ -166,53 +210,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
       expanded: willExpand,
     });
 
-    if (!willExpand) {
-      return;
-    }
-
-    // 每次展开都重新生成，移除缓存检查
-
-    analytics.outreachRequested({
-      journalistName: journalist.name,
-      organization: journalist.parentMediaOrganization,
-      relevanceScore: journalist.relevanceScore,
-      website,
-    });
-
-    setOutreachLoading((prev) => ({ ...prev, [journalistKey]: true }));
-    setOutreachErrors((prev) => {
-      const { [journalistKey]: _ignored, ...rest } = prev;
-      return rest;
-    });
-
-    outreachMutation.mutate(
-      { journalist },
-      {
-        onSuccess: (response) => {
-          setOutreachLoading((prev) => ({ ...prev, [journalistKey]: false }));
-          setOutreachMessages((prev) => ({ ...prev, [journalistKey]: response.outreach }));
-          analytics.outreachGenerated({
-            journalistName: journalist.name,
-            organization: journalist.parentMediaOrganization,
-            relevanceScore: journalist.relevanceScore,
-            website,
-          });
-        },
-        onError: (mutationError) => {
-          setOutreachLoading((prev) => ({ ...prev, [journalistKey]: false }));
-          const message =
-            mutationError instanceof Error ? mutationError.message : 'Unable to generate outreach messages.';
-          setOutreachErrors((prev) => ({ ...prev, [journalistKey]: message }));
-          analytics.outreachGenerationFailed({
-            journalistName: journalist.name,
-            organization: journalist.parentMediaOrganization,
-            relevanceScore: journalist.relevanceScore,
-            website,
-            errorMessage: message,
-          });
-        },
-      },
-    );
+    // 只展开/收起面板，不发起请求（由自动预取处理）
   };
 
   const getRelevanceBadgeColor = (relevanceScore: number) => {
@@ -401,14 +399,29 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                     </div>
 
                     <Button
-                      variant="outline"
+                      variant={outreachError ? "secondary" : "outline"}
                       size="sm"
                       onClick={() => toggleExpanded(journalistKey, journalist)}
-                      className="whitespace-nowrap"
+                      className={`whitespace-nowrap ${
+                        outreachError 
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed opacity-60' 
+                          : isGeneratingOutreach 
+                            ? 'opacity-75' 
+                            : ''
+                      }`}
+                      disabled={!!outreachError}
                     >
                       {isExpanded ? (
                         <>
                           Hide Message <ChevronUp className="ml-2 h-4 w-4" />
+                        </>
+                      ) : isGeneratingOutreach ? (
+                        <>
+                          Generating... <ChevronDown className="ml-2 h-4 w-4 animate-spin" />
+                        </>
+                      ) : outreachError ? (
+                        <>
+                          Failed <ChevronDown className="ml-2 h-4 w-4" />
                         </>
                       ) : (
                         <>
