@@ -93,8 +93,12 @@ Ensure each value is a single concise message for the specified channel, ready t
 async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
+    console.error('❌ OPENAI_API_KEY not found in environment variables');
+    console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('OPENAI')));
     throw new Error('OpenAI API key not configured');
   }
+  
+  console.log('✅ Using OpenAI API key:', apiKey.substring(0, 7) + '...' + apiKey.substring(apiKey.length - 4));
 
   let lastError: any;
   
@@ -280,6 +284,55 @@ router.post('/outreach', async (req, res) => {
       error: 'Failed to generate outreach messages. Please try again.',
       code: 'OPENAI_ERROR',
       detail: error.message
+    });
+  }
+});
+
+// Debug endpoint to test OpenAI connectivity
+router.get('/test-openai', async (req, res) => {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ 
+        error: 'OpenAI API key not configured',
+        envVars: Object.keys(process.env).filter(k => k.includes('OPENAI'))
+      });
+    }
+
+    console.log('🧪 Testing OpenAI connectivity...');
+    const startTime = Date.now();
+    
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      signal: AbortSignal.timeout(15000) // 15s timeout for test
+    });
+    
+    const duration = Date.now() - startTime;
+    
+    if (response.ok) {
+      const data = await response.json();
+      return res.json({
+        success: true,
+        duration: `${duration}ms`,
+        modelsCount: data.data?.length || 0,
+        apiKeyPrefix: apiKey.substring(0, 7) + '...'
+      });
+    } else {
+      return res.status(response.status).json({
+        error: 'OpenAI API error',
+        status: response.status,
+        statusText: response.statusText,
+        duration: `${duration}ms`
+      });
+    }
+  } catch (error: any) {
+    console.error('OpenAI connectivity test failed:', error);
+    return res.status(500).json({
+      error: error.message,
+      type: error.constructor.name,
+      code: error.code
     });
   }
 });

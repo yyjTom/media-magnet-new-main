@@ -83,8 +83,6 @@ export async function findJournalists({
   companyDescription,
 }: FindJournalistsRequest): Promise<FindJournalistsResponse> {
 
-  // Call backend proxy
-
   const hasWebsite = Boolean(website && website.trim().length > 0);
   const safeWebsite = website?.trim() || '';
   const resolvedCompanyName = companyName?.trim() || (hasWebsite ? inferCompanyNameFromUrl(safeWebsite) : 'Your Company');
@@ -157,6 +155,8 @@ export async function findJournalists({
     count: normalized.length,
     preview: normalized.slice(0, 3),
   });
+
+  return { journalists: normalized };
 
   // persist generation if authenticated (best-effort; ignore errors on client)
   try {
