@@ -503,7 +503,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                     <div className="mt-6 pt-6 border-t border-border">
                       <h4 className="font-semibold text-foreground mb-3">Personalized Outreach Drafts</h4>
 
-                      {isGeneratingOutreach && (
+                      {isGeneratingOutreach && !outreach && (
                         <div className="bg-muted p-4 rounded-lg text-sm text-muted-foreground">
                           Generating tailored outreach messages...
                         </div>
@@ -515,7 +515,7 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
                         </div>
                       )}
 
-                      {outreach && !isGeneratingOutreach && !outreachError && (
+                      {outreach && !outreachError && (
                         <div className="space-y-4">
                           <div className="bg-muted p-4 rounded-lg">
                             <h5 className="font-semibold text-foreground mb-2">Email (cold reach)</h5>
