@@ -11,16 +11,21 @@ import generateRoutes from './routes/generate.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Explicitly load .env from project root
-const envPath = path.resolve(__dirname, '../.env');
-console.log('📁 Loading .env from:', envPath);
-
-// Clear any existing OPENAI_API_KEY to avoid conflicts
-delete process.env.OPENAI_API_KEY;
-
-// Load .env file and override existing env vars
-const result = dotenv.config({ path: envPath, override: true });
-console.log('📋 .env file loaded:', result.error ? `❌ ${result.error}` : '✅ Success');
+// Load environment variables (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  // Explicitly load .env from project root for development
+  const envPath = path.resolve(__dirname, '../.env');
+  console.log('📁 Loading .env from:', envPath);
+  
+  // Clear any existing OPENAI_API_KEY to avoid conflicts (dev only)
+  delete process.env.OPENAI_API_KEY;
+  
+  // Load .env file and override existing env vars
+  const result = dotenv.config({ path: envPath, override: true });
+  console.log('📋 .env file loaded:', result.error ? `❌ ${result.error}` : '✅ Success');
+} else {
+  console.log('📋 Production mode: using Vercel environment variables');
+}
 
 // Configure Node.js for better network connectivity
 process.env.UV_THREADPOOL_SIZE = '16'; // Increase thread pool size
