@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 const router = express.Router();
 
@@ -158,7 +159,11 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
         }
       };
       
-      // Use axios with better timeout control
+      // Build optional proxy agent only for external Gemini call
+      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '';
+      const httpsAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+
+      // Use axios with better timeout control (proxy applied only here)
       const response = await axios.post(`${GEMINI_ENDPOINT}?key=${apiKey}`, geminiBody, {
         headers: {
           'Content-Type': 'application/json',
@@ -169,6 +174,7 @@ async function callGemini(messages: any[], maxRetries = 2): Promise<any> {
         // Additional axios configuration for better connectivity
         maxRedirects: 5,
         validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+        httpsAgent,
       });
       
       clearTimeout(timeoutId);
@@ -402,20 +408,24 @@ router.get('/test-gemini', async (req, res) => {
         }
       };
 
-      const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-        method: 'POST',
+      const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '';
+      const httpsAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+
+      const response = await axios.post(`${GEMINI_ENDPOINT}?key=${apiKey}`, testBody, {
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'Node.js'
+          'User-Agent': 'Node.js/Gemini-Client'
         },
-        body: JSON.stringify(testBody),
-        signal: AbortSignal.timeout(60000) // 60s timeout for test
+        timeout: 60000,
+        maxRedirects: 5,
+        validateStatus: (status) => status < 500,
+        httpsAgent,
       });
       
       const duration = Date.now() - startTime;
       
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status < 400) {
+        const data = response.data;
         return res.json({
           success: true,
           duration: `${duration}ms`,
@@ -427,6 +437,7 @@ router.get('/test-gemini', async (req, res) => {
           error: 'Gemini API error',
           status: response.status,
           statusText: response.statusText,
+          data: response.data,
           duration: `${duration}ms`
         });
       }
