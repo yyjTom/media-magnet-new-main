@@ -89,49 +89,86 @@ Return the result as JSON with this exact shape:
 Ensure each value is a single concise message for the specified channel, ready to send.`;
 };
 
+// Helper function for OpenAI requests with timeout and retry
+async function callOpenAI(body: any, maxRetries = 2): Promise<any> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured');
+  }
+
+  let lastError: any;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`OpenAI request attempt ${attempt + 1}/${maxRetries + 1}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
+      const response = await fetch(OPENAI_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+      
+      return await response.json();
+    } catch (error: any) {
+      lastError = error;
+      console.error(`OpenAI request attempt ${attempt + 1} failed:`, error.message);
+      
+      // If it's the last attempt or a non-retryable error, throw
+      if (attempt === maxRetries || (error.name !== 'AbortError' && !error.message.includes('timeout') && !error.message.includes('ECONNRESET') && !error.message.includes('ENOTFOUND'))) {
+        throw error;
+      }
+      
+      // Wait before retry (exponential backoff)
+      const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+      console.log(`Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
 // ---------- Journalists generation ----------
 router.post('/journalists', async (req, res) => {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Server is not configured for OpenAI', code: 'OPENAI_MISSING_KEY' });
-    }
-
     const { website = '', companyName = 'Your Company', companyDescription = 'A high-growth technology startup building innovative products.' } = (req.body || {}) as {
       website?: string;
       companyName?: string;
       companyDescription?: string;
     };
 
-    const response = await fetch(OPENAI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a meticulous media researcher who only responds with valid JSON and never includes commentary outside of the JSON object.',
-          },
-          {
-            role: 'user',
-            content: buildPrompt({ website, companyName, companyDescription }),
-          },
-        ],
-      }),
+    console.log('Generating journalists for:', { website, companyName });
+
+    const payload = await callOpenAI({
+      model: OPENAI_MODEL,
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a meticulous media researcher who only responds with valid JSON and never includes commentary outside of the JSON object.',
+        },
+        {
+          role: 'user',
+          content: buildPrompt({ website, companyName, companyDescription }),
+        },
+      ],
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(500).json({ error: 'OpenAI request failed', detail: errorText });
-    }
-
-    const payload = await response.json();
     const rawContent = payload?.choices?.[0]?.message?.content;
     if (typeof rawContent !== 'string') {
       return res.status(500).json({ error: 'Unexpected OpenAI response format' });
@@ -141,25 +178,42 @@ router.post('/journalists', async (req, res) => {
     try {
       parsed = JSON.parse(rawContent);
     } catch (e) {
-      return res.status(500).json({ error: 'Failed to parse OpenAI JSON' });
+      console.error('Failed to parse OpenAI JSON:', rawContent);
+      return res.status(500).json({ error: 'Failed to parse OpenAI JSON response' });
     }
 
     const journalists = Array.isArray(parsed?.journalists) ? parsed.journalists : [];
+    console.log(`Generated ${journalists.length} journalists`);
     return res.json({ journalists });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Generate journalists failed:', error);
-    return res.status(500).json({ error: 'Server error' });
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError' || error.message.includes('timeout')) {
+      return res.status(504).json({ 
+        error: 'Request timeout - OpenAI API is taking too long to respond. Please try again.',
+        code: 'OPENAI_TIMEOUT'
+      });
+    }
+    
+    if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+      return res.status(503).json({ 
+        error: 'Unable to connect to OpenAI API. Please check your network connection.',
+        code: 'OPENAI_CONNECTION_ERROR'
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: 'Failed to generate journalists. Please try again.',
+      code: 'OPENAI_ERROR',
+      detail: error.message
+    });
   }
 });
 
 // ---------- Outreach generation ----------
 router.post('/outreach', async (req, res) => {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Server is not configured for OpenAI', code: 'OPENAI_MISSING_KEY' });
-    }
-
     const { journalist, companyName, companyDescription, website } = (req.body || {}) as {
       journalist: any;
       companyName: string;
@@ -171,35 +225,24 @@ router.post('/outreach', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const response = await fetch(OPENAI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0.4,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a concise PR copywriter who only responds with valid JSON matching the requested schema.',
-          },
-          {
-            role: 'user',
-            content: buildOutreachPrompt({ journalist, companyName, companyDescription, website }),
-          },
-        ],
-      }),
+    console.log('Generating outreach for:', { journalistName: journalist?.name, companyName });
+
+    const payload = await callOpenAI({
+      model: OPENAI_MODEL,
+      temperature: 0.4,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a concise PR copywriter who only responds with valid JSON matching the requested schema.',
+        },
+        {
+          role: 'user',
+          content: buildOutreachPrompt({ journalist, companyName, companyDescription, website }),
+        },
+      ],
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(500).json({ error: 'OpenAI request failed', detail: errorText });
-    }
-
-    const payload = await response.json();
     const rawContent = payload?.choices?.[0]?.message?.content;
     if (typeof rawContent !== 'string') {
       return res.status(500).json({ error: 'Unexpected OpenAI response format' });
@@ -209,13 +252,35 @@ router.post('/outreach', async (req, res) => {
     try {
       parsed = JSON.parse(rawContent);
     } catch (e) {
-      return res.status(500).json({ error: 'Failed to parse OpenAI JSON' });
+      console.error('Failed to parse OpenAI JSON:', rawContent);
+      return res.status(500).json({ error: 'Failed to parse OpenAI JSON response' });
     }
 
+    console.log('Generated outreach messages for:', journalist?.name);
     return res.json({ outreach: parsed });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Generate outreach failed:', error);
-    return res.status(500).json({ error: 'Server error' });
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError' || error.message.includes('timeout')) {
+      return res.status(504).json({ 
+        error: 'Request timeout - OpenAI API is taking too long to respond. Please try again.',
+        code: 'OPENAI_TIMEOUT'
+      });
+    }
+    
+    if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+      return res.status(503).json({ 
+        error: 'Unable to connect to OpenAI API. Please check your network connection.',
+        code: 'OPENAI_CONNECTION_ERROR'
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: 'Failed to generate outreach messages. Please try again.',
+      code: 'OPENAI_ERROR',
+      detail: error.message
+    });
   }
 });
 

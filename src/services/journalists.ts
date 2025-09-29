@@ -110,13 +110,29 @@ export async function findJournalists({
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[findJournalists] OpenAI request failed', {
+    let errorData: any;
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = { error: await response.text() };
+    }
+    
+    console.error('[findJournalists] Backend request failed', {
       status: response.status,
       statusText: response.statusText,
-      errorText,
+      errorData,
     });
-    throw new Error(`OpenAI request failed: ${response.status} ${response.statusText} - ${errorText}`);
+    
+    // Provide user-friendly error messages
+    if (errorData.code === 'OPENAI_TIMEOUT') {
+      throw new Error('请求超时，OpenAI 服务响应较慢，请稍后重试。');
+    } else if (errorData.code === 'OPENAI_CONNECTION_ERROR') {
+      throw new Error('网络连接问题，无法访问 OpenAI 服务，请检查网络连接。');
+    } else if (errorData.code === 'OPENAI_MISSING_KEY') {
+      throw new Error('服务器配置错误，请联系管理员。');
+    }
+    
+    throw new Error(errorData.error || `请求失败: ${response.status} ${response.statusText}`);
   }
 
   const payload = await response.json();
@@ -349,13 +365,29 @@ export async function getEmailBody({
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[getEmailBody] OpenAI request failed', {
+    let errorData: any;
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = { error: await response.text() };
+    }
+    
+    console.error('[getEmailBody] Backend request failed', {
       status: response.status,
       statusText: response.statusText,
-      errorText,
+      errorData,
     });
-    throw new Error(`OpenAI request failed: ${response.status} ${response.statusText} - ${errorText}`);
+    
+    // Provide user-friendly error messages
+    if (errorData.code === 'OPENAI_TIMEOUT') {
+      throw new Error('请求超时，OpenAI 服务响应较慢，请稍后重试。');
+    } else if (errorData.code === 'OPENAI_CONNECTION_ERROR') {
+      throw new Error('网络连接问题，无法访问 OpenAI 服务，请检查网络连接。');
+    } else if (errorData.code === 'OPENAI_MISSING_KEY') {
+      throw new Error('服务器配置错误，请联系管理员。');
+    }
+    
+    throw new Error(errorData.error || `请求失败: ${response.status} ${response.statusText}`);
   }
 
   const payload = await response.json();
