@@ -125,19 +125,19 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
     if (journalistsList.length === 0) return;
     
     let cancelled = false;
-    console.log(`🚀 Starting outreach generation for ${journalistsList.length} journalists`);
+    console.log(`🚀 Starting concurrent outreach generation for ${journalistsList.length} journalists`);
 
     const generateOutreach = async () => {
-      for (let i = 0; i < journalistsList.length; i++) {
-        if (cancelled) break;
+      // 为每个记者创建独立的异步任务
+      const tasks = journalistsList.map(async (journalist, i) => {
+        if (cancelled) return;
         
-        const journalist = journalistsList[i];
         const key = getJournalistKey(journalist, i);
         
         // 跳过已经处理过的
-        if (journalistStates[key]) continue;
+        if (journalistStates[key]) return;
         
-        console.log(`📝 Processing ${i + 1}/${journalistsList.length}: ${journalist.name}`);
+        console.log(`📝 Starting ${i + 1}/${journalistsList.length}: ${journalist.name}`);
         
         // 设置加载状态
         setJournalistStates(prev => ({
@@ -171,15 +171,13 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
             [key]: { outreach: null, loading: false, error: errorMessage }
           }));
         }
-        
-        // 每个请求间隔 500ms
-        if (!cancelled && i < journalistsList.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
+      });
+
+      // 并发执行所有任务
+      await Promise.allSettled(tasks);
       
       if (!cancelled) {
-        console.log('🎉 All outreach generation completed');
+        console.log('🎉 All outreach generation completed concurrently');
       }
     };
 
