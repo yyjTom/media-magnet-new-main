@@ -445,7 +445,6 @@ export const JournalistList = ({ website, onResults }: JournalistListProps) => {
 
                   {isExpanded && (
                     <div className="mt-6 pt-6 border-t border-border">
-                      <h4 className="font-semibold text-foreground mb-3">Personalized Outreach Drafts</h4>
                       
                       {/* Debug info */}
                       {import.meta.env.DEV && (
