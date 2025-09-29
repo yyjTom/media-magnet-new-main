@@ -22,6 +22,7 @@ console.log('🔧 Node.js configured for better network connectivity');
 console.log('🔧 Environment variables loaded:');
 console.log('- PORT:', process.env.PORT);
 console.log('- GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? `${process.env.GEMINI_API_KEY.substring(0, 7)}...${process.env.GEMINI_API_KEY.substring(process.env.GEMINI_API_KEY.length - 4)}` : '❌ NOT FOUND');
+console.log('- GEMINI_MODEL:', process.env.GEMINI_MODEL || 'gemini-2.0-flash');
 console.log('- DB_URL:', process.env.DB_URL ? '✅ SET' : '❌ NOT SET');
 console.log('- RESEND_API_KEY:', process.env.RESEND_API_KEY ? '✅ SET' : '❌ NOT SET');
 

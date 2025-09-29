@@ -3,8 +3,8 @@ import axios from 'axios';
 
 const router = express.Router();
 
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-const GEMINI_MODEL = 'gemini-pro';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const TARGET_JOURNALIST_COUNT = 20;
 
 // ---------- Shared prompt builders ----------
