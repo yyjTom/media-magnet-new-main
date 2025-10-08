@@ -161,8 +161,11 @@ export const HeroSection = ({
             <div className="text-center pt-4">
               <a 
                 href="mailto:hello@pressclub.app" 
-                className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-foreground bg-muted/50 rounded-lg hover:bg-primary/10 hover:text-primary smooth-transition border border-border hover:border-primary"
+                className="inline-flex items-center gap-2 px-6 py-3 text-base font-semibold text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-lg hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 smooth-transition shadow-md hover:shadow-lg transform hover:scale-105"
               >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
                 <span>Contact: hello@pressclub.app</span>
               </a>
             </div>
