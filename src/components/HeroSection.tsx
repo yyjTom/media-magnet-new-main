@@ -156,6 +156,16 @@ export const HeroSection = ({
                 )}
               </Button>
             </div>
+            
+            {/* Contact Link */}
+            <div className="text-center pt-4">
+              <a 
+                href="mailto:hello@pressclub.app" 
+                className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-foreground bg-muted/50 rounded-lg hover:bg-primary/10 hover:text-primary smooth-transition border border-border hover:border-primary"
+              >
+                <span>Contact: hello@pressclub.app</span>
+              </a>
+            </div>
           </form>
         </div>
 
