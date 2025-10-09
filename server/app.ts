@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 app.use(cors({
   origin: (
     process.env.FRONTEND_URL
-      ? [process.env.FRONTEND_URL]
+      ? [process.env.FRONTEND_URL, 'https://pressclub.app', 'https://www.pressclub.app']
       : ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000']
   ),
   credentials: true
