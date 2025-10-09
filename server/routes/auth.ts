@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
 import { pool } from '../config/database.js';
 import { sendVerificationEmail, generateVerificationCode, testEmailConfiguration } from '../services/emailService.js';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
@@ -11,13 +12,19 @@ const router = express.Router();
 // JWT secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+// Google OAuth client
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 interface User extends RowDataPacket {
   id: number;
   email: string;
-  password: string;
+  password: string | null;
   email_verified: boolean;
   verification_code: string | null;
   verification_expires: Date | null;
+  google_id: string | null;
+  avatar_url: string | null;
+  display_name: string | null;
 }
 
 // Register
@@ -157,6 +164,11 @@ router.post('/login', async (req, res) => {
 
     const user = users[0];
 
+    // Check if user has a password (not Google-only user)
+    if (!user.password) {
+      return res.status(401).json({ error: 'This account uses Google sign-in. Please sign in with Google.', code: 'GOOGLE_ACCOUNT' });
+    }
+
     // Check email verified
     if (!user.email_verified) {
       return res.status(401).json({ error: 'Please verify your email first', code: 'EMAIL_NOT_VERIFIED' });
@@ -231,6 +243,83 @@ router.post('/resend-verification', async (req, res) => {
 
   } catch (error) {
     console.error('Resend verification failed:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Google OAuth login
+router.post('/google-login', async (req, res) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({ error: 'Google credential is required' });
+    }
+
+    // Verify the Google token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload) {
+      return res.status(400).json({ error: 'Invalid Google token' });
+    }
+
+    const { sub: googleId, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email not provided by Google' });
+    }
+
+    // Check if user exists
+    const [existingUsers] = await pool.execute<User[]>(
+      'SELECT * FROM users WHERE email = ? OR google_id = ?',
+      [email, googleId]
+    );
+
+    let userId: number;
+
+    if (existingUsers.length > 0) {
+      // User exists, update Google info if needed
+      const user = existingUsers[0];
+      userId = user.id;
+
+      if (!user.google_id) {
+        await pool.execute(
+          'UPDATE users SET google_id = ?, avatar_url = ?, display_name = ?, email_verified = TRUE WHERE id = ?',
+          [googleId, picture || null, name || null, user.id]
+        );
+      }
+    } else {
+      // Create new user
+      const [result] = await pool.execute<ResultSetHeader>(
+        'INSERT INTO users (email, google_id, avatar_url, display_name, email_verified) VALUES (?, ?, ?, ?, TRUE)',
+        [email, googleId, picture || null, name || null]
+      );
+      userId = result.insertId;
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ userId, email }, JWT_SECRET, {
+      expiresIn: '7d'
+    });
+
+    res.json({
+      message: 'Google login successful',
+      token,
+      user: {
+        id: userId,
+        email,
+        emailVerified: true,
+        displayName: name || null,
+        avatarUrl: picture || null,
+      }
+    });
+
+  } catch (error) {
+    console.error('Google login failed:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

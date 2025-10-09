@@ -7,6 +7,21 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Mail, Lock, CheckCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
 
+// Declare Google types
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: any) => void;
+          renderButton: (element: HTMLElement, config: any) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
+
 interface RegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,6 +51,66 @@ export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin, onRegisterSucc
     window.addEventListener('prefill-register', handler as EventListener);
     return () => window.removeEventListener('prefill-register', handler as EventListener);
   }, []);
+
+  // Initialize Google Sign-In for registration
+  useEffect(() => {
+    if (step !== 'register') return;
+
+    // Load Google Sign-In script
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.id = 'google-signin-script-register';
+    
+    const existingScript = document.getElementById('google-signin-script-register');
+    if (existingScript) return;
+    
+    document.body.appendChild(script);
+
+    script.onload = () => {
+      if (window.google && import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+        window.google.accounts.id.initialize({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          callback: handleGoogleResponse,
+        });
+
+        // Render button if modal is open
+        if (isOpen && step === 'register') {
+          const buttonDiv = document.getElementById('google-register-button');
+          if (buttonDiv && window.google) {
+            window.google.accounts.id.renderButton(buttonDiv, {
+              theme: 'outline',
+              size: 'large',
+              width: '100%',
+              text: 'signup_with',
+            });
+          }
+        }
+      }
+    };
+
+    return () => {
+      const scriptEl = document.getElementById('google-signin-script-register');
+      if (scriptEl) document.body.removeChild(scriptEl);
+    };
+  }, [isOpen, step]);
+
+  const handleGoogleResponse = async (response: any) => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await authService.googleLogin(response.credential);
+      onRegisterSuccess();
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Google sign up failed';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,6 +257,19 @@ export const RegisterModal = ({ isOpen, onClose, onSwitchToLogin, onRegisterSucc
                 'Sign Up'
               )}
             </Button>
+
+            {/* Divider */}
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+              </div>
+            </div>
+
+            {/* Google Sign-Up Button */}
+            <div id="google-register-button" className="flex justify-center"></div>
 
             <div className="text-center">
               <p className="text-sm text-muted-foreground">

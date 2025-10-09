@@ -74,10 +74,13 @@ export async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
+        password VARCHAR(255) NULL,
         email_verified BOOLEAN DEFAULT FALSE,
         verification_code VARCHAR(6) NULL,
         verification_expires DATETIME NULL,
+        google_id VARCHAR(255) NULL,
+        avatar_url TEXT NULL,
+        display_name VARCHAR(255) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
@@ -126,6 +129,20 @@ export async function initializeDatabase() {
     } catch {}
     try {
       await pool.execute('CREATE INDEX idx_user_generation_history_user_created ON user_generation_history (user_id, created_at)');
+    } catch {}
+
+    // Add Google OAuth columns to existing users table if they don't exist
+    try {
+      await pool.execute('ALTER TABLE users MODIFY password VARCHAR(255) NULL');
+    } catch {}
+    try {
+      await pool.execute('ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL');
+    } catch {}
+    try {
+      await pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL');
+    } catch {}
+    try {
+      await pool.execute('ALTER TABLE users ADD COLUMN display_name VARCHAR(255) NULL');
     } catch {}
 
     console.log('Tables and indexes ensured');

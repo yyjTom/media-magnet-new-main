@@ -6,6 +6,8 @@ export interface User {
   id: number;
   email: string;
   emailVerified: boolean;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface AuthResponse {
@@ -90,6 +92,30 @@ class AuthService {
     
     if (!response.ok) {
       throw new Error(data.error || 'Login failed');
+    }
+
+    // 保存认证信息
+    if (data.token && data.user) {
+      this.setAuth(data.token, data.user);
+    }
+
+    return data;
+  }
+
+  // Google login
+  async googleLogin(credential: string): Promise<AuthResponse> {
+    const response = await fetch(`${API_BASE_URL}/auth/google-login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ credential }),
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Google login failed');
     }
 
     // 保存认证信息
